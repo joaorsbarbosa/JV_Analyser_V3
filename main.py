@@ -155,10 +155,13 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # the purpose of this function is to update the JV plot. Basing off the Hegedus' paper (10.1002/pip.518), the JV will be the top left plot.
         # The light JV data will be plotted in red. The dark JV data will be plotted in dark, if the user wants to plot it.
         self.jv_plot.setBackground('w')
-        pen = pg.mkPen(color=(255, 0, 0), width=3)  # To change the color of the plot, you need assign a color to the "pen". In this case (RGB) 255, 0, 0 is RED.
-        # The width is also changed to 3 px wide
-        self.jv_plot.plot(dataframe_light_JV.V, dataframe_light_JV.I, pen=pen)
-
+        if plot_light_JV:  # If the user selected to process Light JV data, plot the light JV data
+            pen = pg.mkPen(color=(255, 0, 0), width=3)  # To change the color of the plot, you need assign a color to the "pen". In this case (RGB) 255, 0, 0 is RED.
+            # The width is also changed to 3 px wide
+            self.jv_plot.plot(dataframe_light_JV.V, dataframe_light_JV.I, pen=pen)
+        if plot_dark_JV: # If the user selected to process Dark JV data, plot the Dark JV data
+            pen = pg.mkPen(color=(0, 0, 0), width=3)  # Changing the pen color back to black, in order to plot the Dark JV data.
+            self.jv_plot.plot(dataframe_dark_JV.V, dataframe_dark_JV.I, pen=pen)
 
 
 
