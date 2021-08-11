@@ -78,8 +78,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             pass
         plot_light_JV = True
         plot_dark_JV = True
-        self.compute_fom(dataframe_light_JV)
+        figures_of_merit = pd.DataFrame([self.compute_fom(dataframe_light_JV)])
+
         self.update_jv_plot(dataframe_light_JV, dataframe_dark_JV, plot_light_JV, plot_dark_JV)
+        self.update_gui_figures_of_merit(figures_of_merit)
 
 
     def load_data(self):
@@ -181,40 +183,64 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         current_spline=interpolate.InterpolatedUnivariateSpline(voltage_sweep,current_sweep)  # The JV data is interpolated using a univariate spline.
 
-        # x=np.linspace(dataframe_light_JV['V'].iloc[0], dataframe_light_JV['V'].iloc[-1],200)
-        # pen = pg.mkPen(color=(0, 255, 0), width=3)
-        # self.jv_plot.plot(x, current_spline(x), name="interpolated", pen=pen, symbol='o', symbolSize=7, symbolBrush='g')
-
         # Check for more info: https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.InterpolatedUnivariateSpline.html
         voltage_open_circuit = current_spline.roots()[0]  # The open circuit voltage will be the "X" (V) where the interpolation function finds the "Y" (J) at zero.
         current_short_circuit = abs(current_spline(0))  # The short circuit current will be the value of "Y" (J) calculated by the interpolation function at an "X" (V) of zero.
 
-        voltage_range_rsh = voltage_sweep.loc[voltage_sweep<0]  # For the shunt resistance calculations, the negative voltage values will be used
+        # Calculate the shunt conductance:
+        voltage_range_rsh = voltage_sweep.loc[voltage_sweep<0]  # For the shunt conductance calculations, the negative voltage values will be used
         current_range_rsh = current_sweep.loc[voltage_sweep<0]   # Same thing for the current. The current values for negative voltages were copied onto current_range_rsh
-        #xyz=stats.linregress(voltage_range_rsh,current_range_rsh)
-        resistance_shunt = stats.linregress(voltage_range_rsh,current_range_rsh)[0]  # The shunt resistance value will be the slope of the linear regression of the negative voltages current curve
-        
-        voltage_range_rs = voltage_sweep.loc[current_sweep>0]  # For the series resistance, the voltage values where the current becomes positive (after Voc) will be used
-        current_range_rs = current_sweep.loc[current_sweep>0]  # For the series resistance, the positive current values will be used.
-        print(current_range_rs)
+        conductance_shunt_lin_regress = stats.linregress(voltage_range_rsh,current_range_rsh)  # Calculates the linear regression of the previously set data range
+        conductance_shunt = conductance_shunt_lin_regress.slope  # The shunt conductance value will be the slope of the linear regression of the negative voltages current curve
+        conductance_shunt_rsquared = conductance_shunt_lin_regress.rvalue**2  # Calculates the R-Squared value of the previous linear regression fit
+        # TODO: Add plots with the fits of the linear regressions
+        # With the shunt conductance calculated, it's time to calculate the series conductance
+        voltage_range_rs = voltage_sweep.loc[current_sweep>0]  # For the series conductance, the voltage values where the current becomes positive (after Voc) will be used
+        current_range_rs = current_sweep.loc[current_sweep>0]  # For the series conductance, the positive current values will be used.
+        # NOW THE CODE WILL FILTER THE CURRENT RANGE TO BE USED!!!
         # For the values to be used, it will be those with positive current value and up to 5 values after (and including) the 1st positive current value
         current_range_rs_diff = current_range_rs.diff()  # This will calculate the difference between the current values (1st derivative).
         # The aim is to detect when the current hits the current compliance of the source meter.
         current_range_rs_diff[current_range_rs_diff.index[0]] = current_range_rs_diff[current_range_rs_diff.index[0]+1]  # Because the 1st value cannot have its 1st derivative calculated, it will return a NaN.
         # The line below does the following: The values that are below 10% of the average value of the 1st derivative of the current will be dropped from the current_range_rs_diff variable
-        current_range_rs_diff.drop(current_range_rs_diff[current_range_rs_diff.mean()*0.1 > current_range_rs_diff].index, inplace=True)
+        current_range_rs_diff = current_range_rs_diff.drop(current_range_rs_diff[current_range_rs_diff.mean()*0.1 > current_range_rs_diff].index)
         # The line below does the following: It keeps only the first 5 values of the positive current data.
-        current_range_rs_diff.drop(current_range_rs_diff[current_range_rs_diff.index > current_range_rs_diff.index[0] + 4].index, inplace=True)
+        current_range_rs_diff = current_range_rs_diff.drop(current_range_rs_diff[current_range_rs_diff.index > current_range_rs_diff.index[0] + 4].index)
         # Now that we have a series with the 1st derivative values higher than 10% of the average, the indexes can be used to "clean" the current_range_rs series.
         current_range_rs = current_range_rs.loc[current_range_rs_diff.index]
-        print(current_range_rs)
-        # self.jv_plot.clear()
-        # pen = pg.mkPen(color=(255, 0, 0), width=3)
-        # 
-        # self.dvdj_plot.plot(voltage_range_rsh,current_range_rsh,name="OG Data", pen=pen, symbol='o', symbolSize=5, symbolBrush='r')
-        # pen = pg.mkPen(color=(0, 0, 255), width=3)
-        # self.dvdj_plot.plot(voltage_range_rsh, xyz.intercept + xyz.slope*voltage_range_rsh, name="fitted", pen=pen, symbol='o', symbolSize=5, symbolBrush='b')
-        print(resistance_shunt)
+        voltage_range_rs = voltage_range_rs.loc[current_range_rs_diff.index]  # The voltage series needs to have the same length as the current one.
+        conductance_series_lin_regress = stats.linregress(voltage_range_rs,current_range_rs)  # Linear regression of the prepared data
+        conductance_series = conductance_series_lin_regress.slope  # The series conductance will be the slope of the linear regression
+        conductance_series_rsquared = conductance_series_lin_regress.rvalue**2  # Calculates the r-squared, in order to determine how good the fit is.
+
+        # Calculate the power, efficiency, fill factor
+        power = voltage_sweep*current_sweep  # Since the polarity of the current was not changed, the "useful" power will be negative
+        power_maximum = abs(power.min())  # As explained previously, the "useful" power is negative. Thus, the maximum power value is negative. Its converted into a positive value by the absolute function (abs)
+        current_max_power = abs(current_sweep[power.idxmin()])  # From the index of the minimum of the power series, get the corresponding value of the current
+        voltage_max_power = voltage_sweep[power.idxmin()]  # From the index of the minimum of the power series, get the corresponding value of the voltage
+        fill_factor = (voltage_max_power*current_max_power)/(voltage_open_circuit*current_short_circuit)*100
+        power_incident = 100
+        efficiency = (voltage_open_circuit*abs(current_short_circuit)*fill_factor)/power_incident  # Could have simply used the value of the maximum power, assuming 1 Sol, but this way it's more rigorous.
+        # Will now create a list with the names of the columns that will be used to create a dataframe to hold and return the FOM values.
+        figures_of_merit = dict({"voltage_open_circuit": voltage_open_circuit, "current_short_circuit": current_short_circuit, "fill_factor": fill_factor, "voltage_max_power": voltage_max_power,
+                                 "current_max_power": current_max_power, "power_maximum": power_maximum, "efficiency": efficiency, "conductance_shunt": conductance_shunt,
+                                 "conductance_shunt_rsquared": conductance_shunt_rsquared, "conductance_series": conductance_series, "conductance_series_rsquared": conductance_series_rsquared })
+
+        return figures_of_merit
+
+    def update_gui_figures_of_merit(self,fom_dataframe):
+        self.result_voc.setText(str(round(fom_dataframe["voltage_open_circuit"][0], 3)))
+        self.result_jsc.setText(str(round(fom_dataframe["current_short_circuit"][0], 2)))
+        self.result_ff.setText(str(round(fom_dataframe["fill_factor"][0], 2)))
+        self.result_vmp.setText(str(round(fom_dataframe["voltage_max_power"][0], 3)))
+        self.result_jmp.setText(str(round(fom_dataframe["current_max_power"][0], 2)))
+        self.result_pmax.setText(str(round(fom_dataframe["power_maximum"][0], 3)))
+        self.result_eff.setText(str(round(fom_dataframe["efficiency"][0], 3)))
+        self.result_gsh.setText(str(round(fom_dataframe["conductance_shunt"][0], 3)))
+        self.result_gsh_squared.setText(str(round(fom_dataframe["conductance_shunt_rsquared"][0], 3)))
+        self.result_gs.setText(str(round(fom_dataframe["conductance_series"][0], 2)))
+        self.result_gs_squared.setText(str(round(fom_dataframe["conductance_series_rsquared"][0], 3)))
+
 def main():
     app = QtWidgets.QApplication(sys.argv)
     main = MainWindow()

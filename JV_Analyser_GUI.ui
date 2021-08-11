@@ -142,7 +142,7 @@
       <string>0.00</string>
      </property>
     </widget>
-    <widget class="QLabel" name="label_rsh">
+    <widget class="QLabel" name="label_gsh">
      <property name="geometry">
       <rect>
        <x>15</x>
@@ -159,10 +159,10 @@
       </font>
      </property>
      <property name="text">
-      <string>R&lt;sub&gt;SH&lt;/sub&gt; (kΩ • cm&lt;sup&gt;2&lt;/sup&gt;)</string>
+      <string>G&lt;sub&gt;SH&lt;/sub&gt; (mS/cm&lt;sup&gt;2&lt;/sup&gt;)</string>
      </property>
     </widget>
-    <widget class="QLineEdit" name="result_rsh">
+    <widget class="QLineEdit" name="result_gsh">
      <property name="geometry">
       <rect>
        <x>130</x>
@@ -415,7 +415,7 @@
       <string>0.00</string>
      </property>
     </widget>
-    <widget class="QLabel" name="label_rsh_rsquared">
+    <widget class="QLabel" name="label_gsh_rsquared">
      <property name="geometry">
       <rect>
        <x>200</x>
@@ -435,7 +435,7 @@
       <string>R&lt;sup&gt;2&lt;/sup&gt;</string>
      </property>
     </widget>
-    <widget class="QLineEdit" name="result_rsh_squared">
+    <widget class="QLineEdit" name="result_gsh_squared">
      <property name="geometry">
       <rect>
        <x>220</x>
