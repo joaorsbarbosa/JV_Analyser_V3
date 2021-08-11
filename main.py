@@ -8,7 +8,8 @@ from JV_Analyser_GUI import Ui_MainWindow  # this import will load the .py file 
 import pandas as pd  # Pandas dataframes are a super useful tool to handle and process data.
 import os, sys  # Necessary modules to allow the python code to interact with Windows.
 
-import random
+from scipy import interpolate
+from scipy import stats
 import numpy as np
 
 ##########################################
@@ -76,7 +77,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             pass
         plot_light_JV = True
         plot_dark_JV = True
+        self.compute_fom(dataframe_light_JV)
         self.update_jv_plot(dataframe_light_JV, dataframe_dark_JV, plot_light_JV, plot_dark_JV)
+
 
     def load_data(self):
         # the line below will open a file dialog window, and ask for the user to select a .csv file. The third part of the .getOpenFileName()
@@ -144,6 +147,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 # if the user does not select anything, the except function will just ignore the error and end the load_data function without any data in return
                 # this will generate an error which will be handled in the execute_processing function.
                 pass
+
+        light_data.I = light_data.I*1000  # The light current is being multiplied by 1000 in order to convert it from A/cm² to mA/cm²
+        dark_data.I = dark_data.I * 1000  # The dark current is being multiplied by 1000 in order to convert it from A/cm² to mA/cm²
         return light_data, dark_data
 
     def parse_file(self, file_name):
@@ -154,17 +160,48 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def update_jv_plot(self, dataframe_light_JV, dataframe_dark_JV, plot_light_JV, plot_dark_JV):
         # the purpose of this function is to update the JV plot. Basing off the Hegedus' paper (10.1002/pip.518), the JV will be the top left plot.
         # The light JV data will be plotted in red. The dark JV data will be plotted in dark, if the user wants to plot it.
+        self.jv_plot.clear()
         self.jv_plot.setBackground('w')
+        self.jv_plot.addLegend()
         if plot_light_JV:  # If the user selected to process Light JV data, plot the light JV data
             pen = pg.mkPen(color=(255, 0, 0), width=3)  # To change the color of the plot, you need assign a color to the "pen". In this case (RGB) 255, 0, 0 is RED.
             # The width is also changed to 3 px wide
-            self.jv_plot.plot(dataframe_light_JV.V, dataframe_light_JV.I, pen=pen)
+            self.jv_plot.plot(dataframe_light_JV.V, dataframe_light_JV.I, name="Light J-V", pen=pen, symbol='o', symbolSize=5, symbolBrush='r')  # if plot_dark_JV else None
+
         if plot_dark_JV: # If the user selected to process Dark JV data, plot the Dark JV data
             pen = pg.mkPen(color=(0, 0, 0), width=3)  # Changing the pen color back to black, in order to plot the Dark JV data.
-            self.jv_plot.plot(dataframe_dark_JV.V, dataframe_dark_JV.I, pen=pen)
+            self.jv_plot.plot(dataframe_dark_JV.V, dataframe_dark_JV.I, name = "Dark J-V", pen=pen, symbol='o', symbolSize=5, symbolBrush='k')
 
+    def compute_fom (self, dataframe_light_JV):
+        # The aim of this function is to calculate the Figures-Of-Merit of the solar cell from the input data. Jsc, Voc, FF, efficiency, etc.
+        # It used data from the LIGHT J-V CURVE!!
+        voltage_sweep=dataframe_light_JV.V
+        current_sweep=dataframe_light_JV.I
 
+        current_spline=interpolate.InterpolatedUnivariateSpline(voltage_sweep,current_sweep)  # The JV data is interpolated using a univariate spline.
 
+        # x=np.linspace(dataframe_light_JV['V'].iloc[0], dataframe_light_JV['V'].iloc[-1],200)
+        # pen = pg.mkPen(color=(0, 255, 0), width=3)
+        # self.jv_plot.plot(x, current_spline(x), name="interpolated", pen=pen, symbol='o', symbolSize=7, symbolBrush='g')
+
+        # Check for more info: https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.InterpolatedUnivariateSpline.html
+        voltage_open_circuit=current_spline.roots()[0]  # The open circuit voltage will be the "X" (V) where the interpolation function finds the "Y" (J) at zero.
+        current_short_circuit=abs(current_spline(0))  # The short circuit current will be the value of "Y" (J) calculated by the interpolation function at an "X" (V) of zero.
+
+        voltage_range_rsh=voltage_sweep.loc[voltage_sweep<0]  # For the shunt resistance calculations, the negative voltage values will be used
+        current_range_rsh=current_sweep.loc[voltage_sweep<0]   # Same thing for the current. The current values for negative voltages were copied onto current_range_rsh
+        #xyz=stats.linregress(voltage_range_rsh,current_range_rsh)
+        resistance_shunt=stats.linregress(voltage_range_rsh,current_range_rsh)[0]  # The shunt resistance value will be the slope of the linear regression of the negative voltages current curve
+        
+        voltage_range_rs=voltage_sweep.loc[current_sweep>0]  # For the series resistance, the voltage values where the current becomes positive (after Voc) will be used
+        current_range_rs=current_sweep.loc[current_sweep>0]  #For the series resistance, the positive current values will be used.
+        # self.jv_plot.clear()
+        # pen = pg.mkPen(color=(255, 0, 0), width=3)
+        # 
+        # self.dvdj_plot.plot(voltage_range_rsh,current_range_rsh,name="OG Data", pen=pen, symbol='o', symbolSize=5, symbolBrush='r')
+        # pen = pg.mkPen(color=(0, 0, 255), width=3)
+        # self.dvdj_plot.plot(voltage_range_rsh, xyz.intercept + xyz.slope*voltage_range_rsh, name="fitted", pen=pen, symbol='o', symbolSize=5, symbolBrush='b')
+        print(resistance_shunt)
 def main():
     app = QtWidgets.QApplication(sys.argv)
     main = MainWindow()
