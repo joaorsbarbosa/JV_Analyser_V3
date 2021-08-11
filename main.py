@@ -10,6 +10,7 @@ import os, sys  # Necessary modules to allow the python code to interact with Wi
 
 from scipy import interpolate
 from scipy import stats
+import math
 import numpy as np
 
 ##########################################
@@ -175,8 +176,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def compute_fom (self, dataframe_light_JV):
         # The aim of this function is to calculate the Figures-Of-Merit of the solar cell from the input data. Jsc, Voc, FF, efficiency, etc.
         # It used data from the LIGHT J-V CURVE!!
-        voltage_sweep=dataframe_light_JV.V
-        current_sweep=dataframe_light_JV.I
+        voltage_sweep = dataframe_light_JV.V
+        current_sweep = dataframe_light_JV.I
 
         current_spline=interpolate.InterpolatedUnivariateSpline(voltage_sweep,current_sweep)  # The JV data is interpolated using a univariate spline.
 
@@ -185,16 +186,28 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # self.jv_plot.plot(x, current_spline(x), name="interpolated", pen=pen, symbol='o', symbolSize=7, symbolBrush='g')
 
         # Check for more info: https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.InterpolatedUnivariateSpline.html
-        voltage_open_circuit=current_spline.roots()[0]  # The open circuit voltage will be the "X" (V) where the interpolation function finds the "Y" (J) at zero.
-        current_short_circuit=abs(current_spline(0))  # The short circuit current will be the value of "Y" (J) calculated by the interpolation function at an "X" (V) of zero.
+        voltage_open_circuit = current_spline.roots()[0]  # The open circuit voltage will be the "X" (V) where the interpolation function finds the "Y" (J) at zero.
+        current_short_circuit = abs(current_spline(0))  # The short circuit current will be the value of "Y" (J) calculated by the interpolation function at an "X" (V) of zero.
 
-        voltage_range_rsh=voltage_sweep.loc[voltage_sweep<0]  # For the shunt resistance calculations, the negative voltage values will be used
-        current_range_rsh=current_sweep.loc[voltage_sweep<0]   # Same thing for the current. The current values for negative voltages were copied onto current_range_rsh
+        voltage_range_rsh = voltage_sweep.loc[voltage_sweep<0]  # For the shunt resistance calculations, the negative voltage values will be used
+        current_range_rsh = current_sweep.loc[voltage_sweep<0]   # Same thing for the current. The current values for negative voltages were copied onto current_range_rsh
         #xyz=stats.linregress(voltage_range_rsh,current_range_rsh)
-        resistance_shunt=stats.linregress(voltage_range_rsh,current_range_rsh)[0]  # The shunt resistance value will be the slope of the linear regression of the negative voltages current curve
+        resistance_shunt = stats.linregress(voltage_range_rsh,current_range_rsh)[0]  # The shunt resistance value will be the slope of the linear regression of the negative voltages current curve
         
-        voltage_range_rs=voltage_sweep.loc[current_sweep>0]  # For the series resistance, the voltage values where the current becomes positive (after Voc) will be used
-        current_range_rs=current_sweep.loc[current_sweep>0]  #For the series resistance, the positive current values will be used.
+        voltage_range_rs = voltage_sweep.loc[current_sweep>0]  # For the series resistance, the voltage values where the current becomes positive (after Voc) will be used
+        current_range_rs = current_sweep.loc[current_sweep>0]  # For the series resistance, the positive current values will be used.
+        print(current_range_rs)
+        # For the values to be used, it will be those with positive current value and up to 5 values after (and including) the 1st positive current value
+        current_range_rs_diff = current_range_rs.diff()  # This will calculate the difference between the current values (1st derivative).
+        # The aim is to detect when the current hits the current compliance of the source meter.
+        current_range_rs_diff[current_range_rs_diff.index[0]] = current_range_rs_diff[current_range_rs_diff.index[0]+1]  # Because the 1st value cannot have its 1st derivative calculated, it will return a NaN.
+        # The line below does the following: The values that are below 10% of the average value of the 1st derivative of the current will be dropped from the current_range_rs_diff variable
+        current_range_rs_diff.drop(current_range_rs_diff[current_range_rs_diff.mean()*0.1 > current_range_rs_diff].index, inplace=True)
+        # The line below does the following: It keeps only the first 5 values of the positive current data.
+        current_range_rs_diff.drop(current_range_rs_diff[current_range_rs_diff.index > current_range_rs_diff.index[0] + 4].index, inplace=True)
+        # Now that we have a series with the 1st derivative values higher than 10% of the average, the indexes can be used to "clean" the current_range_rs series.
+        current_range_rs = current_range_rs.loc[current_range_rs_diff.index]
+        print(current_range_rs)
         # self.jv_plot.clear()
         # pen = pg.mkPen(color=(255, 0, 0), width=3)
         # 
