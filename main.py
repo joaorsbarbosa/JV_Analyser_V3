@@ -76,7 +76,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # A signal is the connection between what happens in the GUI and the python code.
 
         self.actionLoad_Data.triggered.connect(self.execute_processing)  # when the button "Load Data" is pressed, it will run the execute_processing function
-
+        self.spin_conductance_min.valueChanged.connect(self.refresh_analysis)
+        self.spin_conductance_max.valueChanged.connect(self.refresh_analysis)
+        self.spin_ideality_min.valueChanged.connect(self.refresh_analysis)
+        self.spin_ideality_max.valueChanged.connect(self.refresh_analysis)
 
     def execute_processing(self):
         # As far as I know, Qt slots cannot return any data. Thus, I created this function to run all the necessary code to process the data when a file is loaded.
@@ -88,19 +91,22 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
 
         try:
-            data = self.load_data()
+            self.data = self.load_data()
              # the load_data() function will return the light JV and dark JV data in dataframes, with said dataframes inside a tuple
-            dataframe_light_JV = data[0]  # the light JV data sits in the 1st position of the tuple
-            dataframe_dark_JV = data[1]  # the dark JV data sits in the 2nd position of the tuple
+            dataframe_light_JV = self.data[0]  # the light JV data sits in the 1st position of the tuple
+            dataframe_dark_JV = self.data[1]  # the dark JV data sits in the 2nd position of the tuple
+            # TODO: Add the option to not plot light or dark. It needs to take into account the dataframe loading above ⬆
+            self.plot_light_JV = True
+            self.plot_dark_JV = True
+            # The "self.figures_of_merit" will make this dataframe "global" inside the MainWindow class.
+            figures_of_merit_data = pd.DataFrame([self.compute_fom(dataframe_light_JV)])
+            self.update_jv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
+            self.update_gui_figures_of_merit(figures_of_merit_data)
+            self.refresh_analysis()
 
         except:
             pass
-        plot_light_JV = True
-        plot_dark_JV = True
-        figures_of_merit = pd.DataFrame([self.compute_fom(dataframe_light_JV)])
 
-        self.update_jv_plot(dataframe_light_JV, dataframe_dark_JV, plot_light_JV, plot_dark_JV)
-        self.update_gui_figures_of_merit(figures_of_merit)
 
 
     def load_data(self):
@@ -183,7 +189,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # the purpose of this function is to update the JV plot. Basing off the Hegedus' paper (10.1002/pip.518), the JV will be the top left plot.
         # The light JV data will be plotted in red. The dark JV data will be plotted in dark, if the user wants to plot it.
         self.jv_plot.clear()
-        self.jv_plot.setBackground('w')
+       #self.jv_plot.setBackground('w')
         self.jv_plot.addLegend()
         if plot_light_JV:  # If the user selected to process Light JV data, plot the light JV data
             pen = pg.mkPen(color=(255, 0, 0), width=3)  # To change the color of the plot, you need assign a color to the "pen". In this case (RGB) 255, 0, 0 is RED.
@@ -194,7 +200,37 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             pen = pg.mkPen(color=(0, 0, 0), width=3)  # Changing the pen color back to black, in order to plot the Dark JV data.
             self.jv_plot.plot(dataframe_dark_JV.V, dataframe_dark_JV.I, name = "Dark J-V", pen=pen, symbol='o', symbolSize=5, symbolBrush='k')
 
-    def compute_fom (self, dataframe_light_JV):
+    def update_djdv_plot(self,dataframe_light_JV, dataframe_dark_JV, plot_light_JV, plot_dark_JV,):
+
+        self.djdv_plot.clear()
+        self.djdv_plot.addLegend()
+
+        # Getting the voltage values for the dJdV analysis
+        conductance_shunt_x_min = self.spin_conductance_min.value()
+        conductance_shunt_x_max = self.spin_conductance_max.value()
+        # Making the interpolation functions of the light and dark curves so that the 1st derivative can be calculated
+        djdv_light_spline = interpolate.InterpolatedUnivariateSpline(dataframe_light_JV.V, dataframe_light_JV.I)
+        djdv_dark_spline = interpolate.InterpolatedUnivariateSpline(dataframe_dark_JV.V, dataframe_dark_JV.I)
+
+        djdv_light_spline_derivative = djdv_light_spline.derivative(n=1)
+        djdv_dark_spline_derivative = djdv_dark_spline.derivative(n=1)
+        # This will create a dataframe with the voltages between the selected range
+        voltage_interval_light = dataframe_light_JV.V[(dataframe_light_JV["V"] >= conductance_shunt_x_min) & (dataframe_light_JV["V"] <= conductance_shunt_x_max)]
+        voltage_interval_light = voltage_interval_light.reset_index(drop=True)
+
+        voltage_interval_dark = dataframe_dark_JV.V[(dataframe_dark_JV["V"] >= conductance_shunt_x_min) & (dataframe_dark_JV["V"] <= conductance_shunt_x_max)]
+        voltage_interval_dark = voltage_interval_dark.reset_index(drop=True)
+
+        if plot_light_JV:  # If the user selected to process Light JV data, plot the light JV data
+            pen = pg.mkPen(color=(255, 0, 0), width=3)  # To change the color of the plot, you need assign a color to the "pen". In this case (RGB) 255, 0, 0 is RED.
+            # The width is also changed to 3 px wide
+            self.djdv_plot.plot(voltage_interval_light, djdv_light_spline_derivative(voltage_interval_light), name="Light dJdV", pen=pen, symbol='o', symbolSize=5, symbolBrush='r')  # if plot_dark_JV else None
+
+        if plot_dark_JV:  # If the user selected to process Dark JV data, plot the Dark JV data
+            pen = pg.mkPen(color=(0, 0, 0), width=3)  # Changing the pen color back to black, in order to plot the Dark JV data.
+            self.djdv_plot.plot(voltage_interval_dark, djdv_dark_spline_derivative(voltage_interval_dark), name="Dark dJdV", pen=pen, symbol='o', symbolSize=5, symbolBrush='k')
+
+    def compute_fom(self, dataframe_light_JV):
         # The aim of this function is to calculate the Figures-Of-Merit of the solar cell from the input data. Jsc, Voc, FF, efficiency, etc.
         # It used data from the LIGHT J-V CURVE!!
         voltage_sweep = dataframe_light_JV.V
@@ -212,7 +248,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         conductance_shunt_lin_regress = stats.linregress(voltage_range_rsh,current_range_rsh)  # Calculates the linear regression of the previously set data range
         conductance_shunt = conductance_shunt_lin_regress.slope  # The shunt conductance value will be the slope of the linear regression of the negative voltages current curve
         conductance_shunt_rsquared = conductance_shunt_lin_regress.rvalue**2  # Calculates the R-Squared value of the previous linear regression fit
-        # TODO: Add plots with the fits of the linear regressions
+
         # With the shunt conductance calculated, it's time to calculate the series conductance
         voltage_range_rs = voltage_sweep.loc[current_sweep > 0]  # For the series conductance, the voltage values where the current becomes positive (after Voc) will be used
         current_range_rs = current_sweep.loc[current_sweep > 0]  # For the series conductance, the positive current values will be used.
@@ -264,8 +300,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.linear_reg_rsh_plot.clear()
         self.linear_reg_rsh_plot.addLegend()
         pen = pg.mkPen(color=(255, 0, 0), width=3)  # First, we will define the "red pen", to plot the original JV data used for the JV calculation.
+        # This line will plot the original data used for the linear regression
         self.linear_reg_rsh_plot.plot(voltage_range_rsh, current_range_rsh, name="J-V Data", pen=pen, symbol="o", symbolSize=8, symbolBrush="r")
         pen = pg.mkPen(color=(0, 0, 255), width=3)  # Setting the pen to blue to plot the linear regression.
+        # This line will plot the linear regression
         self.linear_reg_rsh_plot.plot(voltage_range_rsh, conductance_shunt_lin_regress.intercept + conductance_shunt_lin_regress.slope*voltage_range_rsh, name="Linear Regression", pen=pen, symbol="o", symbolSize=5, symboBrush="b")
 
         # Time to plot the linear regression of the series conductance
@@ -274,8 +312,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         pen = pg.mkPen(color=(255, 0, 0), width=3)  # First, we will define the "red pen", to plot the original JV data used for the JV calculation.
         voltage_range_rs = voltage_range_rs.reset_index(drop=True)
         current_range_rs = current_range_rs.reset_index(drop=True)
+        # This line will plot the original data used for the linear regression
         self.linear_reg_rs_plot.plot(voltage_range_rs, current_range_rs, name="JV Data", pen=pen, symbol="o", symbolSize=8, symbolBrush="r")
         pen = pg.mkPen(color=(0, 0, 255), width=3)  # Setting the pen to blue to plot the linear regression.
+        # This line will plot the linear regression
         self.linear_reg_rs_plot.plot(voltage_range_rs, conductance_series_lin_regress.intercept + conductance_series_lin_regress.slope*voltage_range_rs, name="Linear Regression", pen=pen, symbol="o", symbolSize=5, symboBrush="b")
 
         return figures_of_merit
@@ -295,6 +335,20 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.result_gs.setText(str(round(fom_dataframe["conductance_series"][0], 2)))
         self.result_gs_squared.setText(str(round(fom_dataframe["conductance_series_rsquared"][0], 3)))
 
+    def refresh_analysis(self):
+        # Before changing the  analysis, the program needs to check if there is any data loaded. If there is, the refresh_analysis() function will proceed normally
+        # If not, it will throw an error at the user
+        try:
+            dataframe_light_JV = self.data[0]  # the light JV data sits in the 1st position of the tuple
+            dataframe_dark_JV = self.data[1]  # the dark JV data sits in the 2nd position of the tuple
+            self.update_djdv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
+        except:
+            error_dialog = QMessageBox()
+            error_dialog.setIcon(QMessageBox.Critical)
+            error_dialog.setText("There is no data to analyse!")
+            error_dialog.setInformativeText("Please load the J-V data first.")
+            error_dialog.setWindowTitle("Error!")
+            error_dialog.exec_()
 def main():
     app = QtWidgets.QApplication(sys.argv)
     main = MainWindow()
