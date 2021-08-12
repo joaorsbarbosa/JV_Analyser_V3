@@ -24,6 +24,7 @@ pg.setConfigOption('background', 'w')  # Sets the background of the plots as WHI
 pg.setConfigOption('foreground', 'k')  # Sets the lines of the plots as BLACK
 pg.setConfigOptions(antialias=True)  # Makes the lines smoother (removes "stair casing" effect). Purely visual setting. Does not affect the data.
 
+
 # ---------------------------------------#
 
 class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
@@ -51,6 +52,24 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.jjsc_plot.setLabel("left", "<span style=\"color:black;font-size:18px\">J+J<sub>SC</sub>-GV (mA/cm<sup>2</sup>)</span>")
         self.jjsc_plot.setLabel("bottom","<span style=\"color:black;font-size:18px\">V-RJ (V)</span>")
         self.jjsc_plot.showGrid(x=True, y=True)
+
+        # Some additional plots will be added, so the user can check the quality of the fits.
+        # The settings of the plots will be defined
+
+        self.interpolation_plot.setLabel("left", "<span style=\"color:black;font-size:18px\">J (mA/cm<sup>2</sup>)</span>")
+        self.interpolation_plot.setLabel("bottom", "<span style=\"color:black;font-size:18px\">V (V)</span>")
+        self.interpolation_plot.showGrid(x=True, y=True)
+        self.interpolation_plot.setTitle("Interpolated J-V")
+
+        self.linear_reg_rs_plot.setLabel("left", "<span style=\"color:black;font-size:18px\">J (mA/cm<sup>2</sup>)</span>")
+        self.linear_reg_rs_plot.setLabel("bottom", "<span style=\"color:black;font-size:18px\">V (V)</span>")
+        self.linear_reg_rs_plot.showGrid(x=True, y=True)
+        self.linear_reg_rs_plot.setTitle("Series Conductance Linear Regression")
+
+        self.linear_reg_rsh_plot.setLabel("left", "<span style=\"color:black;font-size:18px\">J (mA/cm<sup>2</sup>)</span>")
+        self.linear_reg_rsh_plot.setLabel("bottom", "<span style=\"color:black;font-size:18px\">V (V)</span>")
+        self.linear_reg_rsh_plot.showGrid(x=True, y=True)
+        self.linear_reg_rsh_plot.setTitle("Shunt Conductance Linear Regression")
         # ---------------------------------------#
 
         ################## SIGNALS ##################
@@ -181,22 +200,22 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         voltage_sweep = dataframe_light_JV.V
         current_sweep = dataframe_light_JV.I
 
-        current_spline=interpolate.InterpolatedUnivariateSpline(voltage_sweep,current_sweep)  # The JV data is interpolated using a univariate spline.
-
+        current_spline = interpolate.InterpolatedUnivariateSpline(voltage_sweep, current_sweep)  # The JV data is interpolated using a univariate spline.
         # Check for more info: https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.InterpolatedUnivariateSpline.html
+
         voltage_open_circuit = current_spline.roots()[0]  # The open circuit voltage will be the "X" (V) where the interpolation function finds the "Y" (J) at zero.
         current_short_circuit = abs(current_spline(0))  # The short circuit current will be the value of "Y" (J) calculated by the interpolation function at an "X" (V) of zero.
 
         # Calculate the shunt conductance:
-        voltage_range_rsh = voltage_sweep.loc[voltage_sweep<0]  # For the shunt conductance calculations, the negative voltage values will be used
-        current_range_rsh = current_sweep.loc[voltage_sweep<0]   # Same thing for the current. The current values for negative voltages were copied onto current_range_rsh
+        voltage_range_rsh = voltage_sweep.loc[voltage_sweep < 0]  # For the shunt conductance calculations, the negative voltage values will be used
+        current_range_rsh = current_sweep.loc[voltage_sweep < 0]   # Same thing for the current. The current values for negative voltages were copied onto current_range_rsh
         conductance_shunt_lin_regress = stats.linregress(voltage_range_rsh,current_range_rsh)  # Calculates the linear regression of the previously set data range
         conductance_shunt = conductance_shunt_lin_regress.slope  # The shunt conductance value will be the slope of the linear regression of the negative voltages current curve
         conductance_shunt_rsquared = conductance_shunt_lin_regress.rvalue**2  # Calculates the R-Squared value of the previous linear regression fit
         # TODO: Add plots with the fits of the linear regressions
         # With the shunt conductance calculated, it's time to calculate the series conductance
-        voltage_range_rs = voltage_sweep.loc[current_sweep>0]  # For the series conductance, the voltage values where the current becomes positive (after Voc) will be used
-        current_range_rs = current_sweep.loc[current_sweep>0]  # For the series conductance, the positive current values will be used.
+        voltage_range_rs = voltage_sweep.loc[current_sweep > 0]  # For the series conductance, the voltage values where the current becomes positive (after Voc) will be used
+        current_range_rs = current_sweep.loc[current_sweep > 0]  # For the series conductance, the positive current values will be used.
         # NOW THE CODE WILL FILTER THE CURRENT RANGE TO BE USED!!!
         # For the values to be used, it will be those with positive current value and up to 5 values after (and including) the 1st positive current value
         current_range_rs_diff = current_range_rs.diff()  # This will calculate the difference between the current values (1st derivative).
@@ -209,7 +228,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Now that we have a series with the 1st derivative values higher than 10% of the average, the indexes can be used to "clean" the current_range_rs series.
         current_range_rs = current_range_rs.loc[current_range_rs_diff.index]
         voltage_range_rs = voltage_range_rs.loc[current_range_rs_diff.index]  # The voltage series needs to have the same length as the current one.
-        conductance_series_lin_regress = stats.linregress(voltage_range_rs,current_range_rs)  # Linear regression of the prepared data
+        conductance_series_lin_regress = stats.linregress(voltage_range_rs, current_range_rs)  # Linear regression of the prepared data
         conductance_series = conductance_series_lin_regress.slope  # The series conductance will be the slope of the linear regression
         conductance_series_rsquared = conductance_series_lin_regress.rvalue**2  # Calculates the r-squared, in order to determine how good the fit is.
 
@@ -218,17 +237,52 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         power_maximum = abs(power.min())  # As explained previously, the "useful" power is negative. Thus, the maximum power value is negative. Its converted into a positive value by the absolute function (abs)
         current_max_power = abs(current_sweep[power.idxmin()])  # From the index of the minimum of the power series, get the corresponding value of the current
         voltage_max_power = voltage_sweep[power.idxmin()]  # From the index of the minimum of the power series, get the corresponding value of the voltage
-        fill_factor = (voltage_max_power*current_max_power)/(voltage_open_circuit*current_short_circuit)*100
-        power_incident = 100
-        efficiency = (voltage_open_circuit*abs(current_short_circuit)*fill_factor)/power_incident  # Could have simply used the value of the maximum power, assuming 1 Sol, but this way it's more rigorous.
+        fill_factor = (voltage_max_power * current_max_power) / (voltage_open_circuit * current_short_circuit) * 100
+        power_incident = 100  # mW/cm². Later, if needed, this will be controlled by the user
+        efficiency = (voltage_open_circuit * abs(current_short_circuit) * fill_factor) / power_incident  # Could have simply used the value of the maximum power, assuming 1 Sol, but this way it's more rigorous.
         # Will now create a list with the names of the columns that will be used to create a dataframe to hold and return the FOM values.
         figures_of_merit = dict({"voltage_open_circuit": voltage_open_circuit, "current_short_circuit": current_short_circuit, "fill_factor": fill_factor, "voltage_max_power": voltage_max_power,
                                  "current_max_power": current_max_power, "power_maximum": power_maximum, "efficiency": efficiency, "conductance_shunt": conductance_shunt,
                                  "conductance_shunt_rsquared": conductance_shunt_rsquared, "conductance_series": conductance_series, "conductance_series_rsquared": conductance_series_rsquared })
 
+        # ---------------- #
+        # ADDITIONAL PLOTS #
+        # ---------------- #
+
+        # In order for the user to determine the quality of the interpolation, the interpolated approximation will be plotted
+        self.interpolation_plot.clear()
+        self.interpolation_plot.addLegend()
+
+        # The X axis needs to be defined. The X axis will have the same start and end as the voltage_sweep.
+        interpolation_x = np.linspace(dataframe_light_JV['V'].iloc[0], dataframe_light_JV['V'].iloc[-1], len(dataframe_light_JV) * 5)  # The number of points plotted will be 5 times greater than those in the original data
+        pen = pg.mkPen(color=(255, 0, 0), width=3)  # First, we will define the "red pen", to plot the original JV data.
+        self.interpolation_plot.plot(dataframe_light_JV.V, dataframe_light_JV.I, name="Original Data", pen=pen, symbol="o", symbolSize=8, symbolBrush='r')  # This will plot the original JV data
+        pen = pg.mkPen(color=(0, 0, 255), width=3)  # With the original data plotted, the interpolated data will be plotted in blue.
+        self.interpolation_plot.plot(interpolation_x, current_spline(interpolation_x), name="Interpolated Data", pen=pen, symbol="o", symbolSize=5, symbolBrush='b')
+
+        # Now the linear regression of the shunt conductance will be plotted
+        self.linear_reg_rsh_plot.clear()
+        self.linear_reg_rsh_plot.addLegend()
+        pen = pg.mkPen(color=(255, 0, 0), width=3)  # First, we will define the "red pen", to plot the original JV data used for the JV calculation.
+        self.linear_reg_rsh_plot.plot(voltage_range_rsh, current_range_rsh, name="J-V Data", pen=pen, symbol="o", symbolSize=8, symbolBrush="r")
+        pen = pg.mkPen(color=(0, 0, 255), width=3)  # Setting the pen to blue to plot the linear regression.
+        self.linear_reg_rsh_plot.plot(voltage_range_rsh, conductance_shunt_lin_regress.intercept + conductance_shunt_lin_regress.slope*voltage_range_rsh, name="Linear Regression", pen=pen, symbol="o", symbolSize=5, symboBrush="b")
+
+        # Time to plot the linear regression of the series conductance
+        self.linear_reg_rs_plot.clear()
+        self.linear_reg_rs_plot.addLegend()
+        pen = pg.mkPen(color=(255, 0, 0), width=3)  # First, we will define the "red pen", to plot the original JV data used for the JV calculation.
+        voltage_range_rs = voltage_range_rs.reset_index(drop=True)
+        current_range_rs = current_range_rs.reset_index(drop=True)
+        self.linear_reg_rs_plot.plot(voltage_range_rs, current_range_rs, name="JV Data", pen=pen, symbol="o", symbolSize=8, symbolBrush="r")
+        pen = pg.mkPen(color=(0, 0, 255), width=3)  # Setting the pen to blue to plot the linear regression.
+        self.linear_reg_rs_plot.plot(voltage_range_rs, conductance_series_lin_regress.intercept + conductance_series_lin_regress.slope*voltage_range_rs, name="Linear Regression", pen=pen, symbol="o", symbolSize=5, symboBrush="b")
+
         return figures_of_merit
 
     def update_gui_figures_of_merit(self,fom_dataframe):
+
+        # This code will add the previously calculated figures of merit into the GUI. It will also round the numbers to 2 or 3 decimals
         self.result_voc.setText(str(round(fom_dataframe["voltage_open_circuit"][0], 3)))
         self.result_jsc.setText(str(round(fom_dataframe["current_short_circuit"][0], 2)))
         self.result_ff.setText(str(round(fom_dataframe["fill_factor"][0], 2)))

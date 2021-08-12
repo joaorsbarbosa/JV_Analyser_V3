@@ -541,7 +541,7 @@
      <property name="currentIndex">
       <number>0</number>
      </property>
-     <widget class="QWidget" name="analysis_results_light" native="true">
+     <widget class="QWidget" name="analysis_results_light">
       <attribute name="title">
        <string>Light</string>
       </attribute>
@@ -1199,7 +1199,7 @@
      <enum>QTabWidget::Triangular</enum>
     </property>
     <property name="currentIndex">
-     <number>0</number>
+     <number>1</number>
     </property>
     <widget class="QWidget" name="plots_tab">
      <attribute name="title">
@@ -1245,6 +1245,54 @@
        </item>
        <item row="0" column="0">
         <widget class="PlotWidget" name="jv_plot" native="true"/>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+    <widget class="QWidget" name="more_plots_tab">
+     <attribute name="title">
+      <string>Additional Plots</string>
+     </attribute>
+     <widget class="QWidget" name="layoutWidget_2">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>10</y>
+        <width>1041</width>
+        <height>801</height>
+       </rect>
+      </property>
+      <layout class="QGridLayout" name="gridLayout_2">
+       <property name="leftMargin">
+        <number>10</number>
+       </property>
+       <property name="topMargin">
+        <number>10</number>
+       </property>
+       <property name="rightMargin">
+        <number>10</number>
+       </property>
+       <property name="bottomMargin">
+        <number>10</number>
+       </property>
+       <property name="spacing">
+        <number>0</number>
+       </property>
+       <item row="0" column="1">
+        <widget class="PlotWidget" name="spare_plot" native="true">
+         <property name="autoFillBackground">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="PlotWidget" name="linear_reg_rsh_plot" native="true"/>
+       </item>
+       <item row="1" column="1">
+        <widget class="PlotWidget" name="linear_reg_rs_plot" native="true"/>
+       </item>
+       <item row="0" column="0">
+        <widget class="PlotWidget" name="interpolation_plot" native="true"/>
        </item>
       </layout>
      </widget>
