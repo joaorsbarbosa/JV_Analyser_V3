@@ -10,6 +10,7 @@ import os, sys  # Necessary modules to allow the python code to interact with Wi
 
 from scipy import interpolate
 from scipy import stats
+from scipy import constants
 import math
 import numpy as np
 
@@ -100,11 +101,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # The "self.figures_of_merit" will make this dataframe "global" inside the MainWindow class.
             figures_of_merit_data = pd.DataFrame([self.compute_fom(dataframe_light_JV)])
             self.update_jv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
-            self.refresh_analysis()
+
             self.update_gui_results(figures_of_merit_data)
         except:
             pass
-
+        self.refresh_analysis()
     def load_data(self):
         # the line below will open a file dialog window, and ask for the user to select a .csv file. The third part of the .getOpenFileName()
         # with "CSV Files (*.csv)" will apply a filter so that only .csv files show up. This will return a tuple with the position
@@ -259,12 +260,56 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def update_dvdj_plot(self,dataframe_light_JV, dataframe_dark_JV, plot_light_JV, plot_dark_JV):
 
+        # Lab's temperature for ideality factor calculation:
+        T = 296.15  # 23℃
+        q = constants.elementary_charge
+        k = constants.k
+
         self.dvdj_plot.clear()
         self.dvdj_plot.addLegend()
 
         conductance_series_x_min = self.spin_ideality_min.value()
         conductance_series_x_max = self.spin_ideality_max.value()
+        
+        if plot_light_JV:
+            # The voltage range is adjusted in accordance to the user's input
+            voltage_interval_light = dataframe_light_JV.V[(dataframe_light_JV["V"] >= conductance_series_x_min) & (dataframe_light_JV["V"] <= conductance_series_x_max)]
+            voltage_interval_light = voltage_interval_light.reset_index(drop=True)
+            current_interval_light = dataframe_light_JV.I[(dataframe_light_JV["V"] >= conductance_series_x_min) & (dataframe_light_JV["V"] <= conductance_series_x_max)]
+            current_interval_light = current_interval_light.reset_index(drop=True)
+            # Now the short circuit current will be calculated
+            current_spline_light = interpolate.InterpolatedUnivariateSpline(dataframe_light_JV.V, dataframe_light_JV.I)
+            current_short_circuit_light = abs(current_spline_light(0))
+            # The (J+Jsc)^-1 is calculated
+            jjsc_light = (current_spline_light(voltage_interval_light)+current_short_circuit_light)** (-1)
+            # The 1st value of this array needs to be dropped, as the np.diff does not calculate the difference of the 1st value
+            jjsc_light = np.delete(jjsc_light,0)
+            # Now the derivative dV/dJ is calculated. numpy diff is used instead of pandas diff, since the later will return a NaN in the first row
+            dVdJ_light = np.diff(voltage_interval_light)/np.diff(current_interval_light)*1000 # multiplying by a thousand to go from kΩ to Ω
 
+            pen = pg.mkPen(color=(255, 0, 0), width=3)  # To change the color of the plot, you need assign a color to the "pen". In this case (RGB) 255, 0, 0 is RED.
+            # The width is also changed to 3 px wide
+            self.dvdj_plot.plot(jjsc_light, dVdJ_light, name="Light", pen=pen, symbol='o', symbolSize=5, symbolBrush='r')
+
+        if plot_dark_JV:
+
+            # The voltage range is adjusted in accordance to the user's input
+            voltage_interval_dark = dataframe_dark_JV.V[(dataframe_dark_JV["V"] >= conductance_series_x_min) & (dataframe_dark_JV["V"] <= conductance_series_x_max)]
+            voltage_interval_dark = voltage_interval_dark.reset_index(drop=True)
+            current_interval_dark = dataframe_dark_JV.I[(dataframe_dark_JV["V"] >= conductance_series_x_min) & (dataframe_dark_JV["V"] <= conductance_series_x_max)]
+            current_interval_dark = current_interval_dark.reset_index(drop=True)
+
+            # Now the short circuit current will be calculated
+            current_spline_dark = interpolate.InterpolatedUnivariateSpline(dataframe_dark_JV.V, dataframe_dark_JV.I)
+            current_short_circuit_dark = abs(current_spline_dark(0))
+            # The (J+Jsc)^-1 is calculated
+            jjsc_dark = (current_spline_dark(voltage_interval_dark) + current_short_circuit_dark) ** (-1)
+            # The 1st value of this array needs to be dropped, as the np.diff does not calculate the difference of the 1st value
+            jjsc_dark = np.delete(jjsc_dark, 0)
+            # Now the derivative dV/dJ is calculated. numpy diff is used instead of pandas diff, since the later will return a NaN in the first row
+            dVdJ_dark = np.diff(voltage_interval_dark) / np.diff(current_interval_dark)*1000 # multiplying by a thousand to go from kΩ to Ω
+            pen = pg.mkPen(color=(0, 0, 0), width=3)
+            self.dvdj_plot.plot(jjsc_dark, dVdJ_dark, name="Dark", pen=pen, symbol='o', symbolSize=5, symbolBrush='k')
 
     def compute_fom(self, dataframe_light_JV):
         # The aim of this function is to calculate the Figures-Of-Merit of the solar cell from the input data. Jsc, Voc, FF, efficiency, etc.
@@ -376,19 +421,21 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def refresh_analysis(self):
         # Before changing the  analysis, the program needs to check if there is any data loaded. If there is, the refresh_analysis() function will proceed normally
         # If not, it will throw an error at the user
-        try:
-            dataframe_light_JV = self.data[0]  # the light JV data sits in the 1st position of the tuple
-            dataframe_dark_JV = self.data[1]  # the dark JV data sits in the 2nd position of the tuple
-            self.djdv_results = self.update_djdv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
-
-        except:
-            error_dialog = QMessageBox()
-            error_dialog.setIcon(QMessageBox.Critical)
-            error_dialog.setText("There is no data to analyse!")
-            error_dialog.setInformativeText("Please load the J-V data first.")
-            error_dialog.setWindowTitle("Error!")
-            error_dialog.exec_()
-
+        # try:
+        #
+        #
+        #
+        # except:
+        #     error_dialog = QMessageBox()
+        #     error_dialog.setIcon(QMessageBox.Critical)
+        #     error_dialog.setText("There is no data to analyse!")
+        #     error_dialog.setInformativeText("Please load the J-V data first.")
+        #     error_dialog.setWindowTitle("Error!")
+        #     error_dialog.exec_()
+        dataframe_light_JV = self.data[0]  # the light JV data sits in the 1st position of the tuple
+        dataframe_dark_JV = self.data[1]  # the dark JV data sits in the 2nd position of the tuple
+        self.djdv_results = self.update_djdv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
+        self.dvdj_results = self.update_dvdj_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
 def main():
     app = QtWidgets.QApplication(sys.argv)
     main = MainWindow()
