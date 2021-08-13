@@ -524,7 +524,7 @@ class Ui_MainWindow(object):
 
         self.retranslateUi(MainWindow)
         self.analysis_results.setCurrentIndex(0)
-        self.tabWidget.setCurrentIndex(1)
+        self.tabWidget.setCurrentIndex(0)
         self.checkBox_autodark.stateChanged['int'].connect(self.checkBox_analyse_dark.click)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
@@ -557,7 +557,7 @@ class Ui_MainWindow(object):
         self.analysis.setTitle(_translate("MainWindow", "Analysis"))
         self.label_j0light.setText(_translate("MainWindow", "<html><head/><body><p>J<span style=\" vertical-align:sub;\">0</span> (mA/cm<span style=\" vertical-align:super;\">2</span>)</p></body></html>"))
         self.label_gslight.setText(_translate("MainWindow", "<html><head/><body><p>G<span style=\" vertical-align:sub;\">S</span> (mS/cm<span style=\" vertical-align:super;\">2</span>)</p></body></html>"))
-        self.label_rshlight.setText(_translate("MainWindow", "<html><head/><body><p>R<span style=\" vertical-align:sub;\">SH</span> (kΩ • cm<span style=\" vertical-align:super;\">2</span>)</p></body></html>"))
+        self.label_rshlight.setText(_translate("MainWindow", "G<sub>SH</sub> (mS/cm<sup>2</sup>)"))
         self.label_a1light.setText(_translate("MainWindow", "<html><head/><body><p>A<span style=\" vertical-align:sub;\">1</span></p></body></html>"))
         self.label_a2light.setText(_translate("MainWindow", "<html><head/><body><p>A<span style=\" vertical-align:sub;\">2</span></p></body></html>"))
         self.result_gslight.setPlaceholderText(_translate("MainWindow", "0.00"))

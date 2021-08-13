@@ -89,10 +89,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # error handling "try" and "except" functions. If the user selects a file, the code inside "try:" will run. If not, an error will be raised, and the "except:"
         # code will just ignore it and do nothing.
 
-
         try:
             self.data = self.load_data()
-             # the load_data() function will return the light JV and dark JV data in dataframes, with said dataframes inside a tuple
+            # the load_data() function will return the light JV and dark JV data in dataframes, with said dataframes inside a tuple
             dataframe_light_JV = self.data[0]  # the light JV data sits in the 1st position of the tuple
             dataframe_dark_JV = self.data[1]  # the dark JV data sits in the 2nd position of the tuple
             # TODO: Add the option to not plot light or dark. It needs to take into account the dataframe loading above ⬆
@@ -101,13 +100,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # The "self.figures_of_merit" will make this dataframe "global" inside the MainWindow class.
             figures_of_merit_data = pd.DataFrame([self.compute_fom(dataframe_light_JV)])
             self.update_jv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
-            self.update_gui_figures_of_merit(figures_of_merit_data)
             self.refresh_analysis()
-
+            self.update_gui_results(figures_of_merit_data)
         except:
             pass
-
-
 
     def load_data(self):
         # the line below will open a file dialog window, and ask for the user to select a .csv file. The third part of the .getOpenFileName()
@@ -200,7 +196,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             pen = pg.mkPen(color=(0, 0, 0), width=3)  # Changing the pen color back to black, in order to plot the Dark JV data.
             self.jv_plot.plot(dataframe_dark_JV.V, dataframe_dark_JV.I, name = "Dark J-V", pen=pen, symbol='o', symbolSize=5, symbolBrush='k')
 
-    def update_djdv_plot(self,dataframe_light_JV, dataframe_dark_JV, plot_light_JV, plot_dark_JV,):
+    def update_djdv_plot(self,dataframe_light_JV, dataframe_dark_JV, plot_light_JV, plot_dark_JV):
 
         self.djdv_plot.clear()
         self.djdv_plot.addLegend()
@@ -209,26 +205,66 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         conductance_shunt_x_min = self.spin_conductance_min.value()
         conductance_shunt_x_max = self.spin_conductance_max.value()
         # Making the interpolation functions of the light and dark curves so that the 1st derivative can be calculated
-        djdv_light_spline = interpolate.InterpolatedUnivariateSpline(dataframe_light_JV.V, dataframe_light_JV.I)
-        djdv_dark_spline = interpolate.InterpolatedUnivariateSpline(dataframe_dark_JV.V, dataframe_dark_JV.I)
-
-        djdv_light_spline_derivative = djdv_light_spline.derivative(n=1)
-        djdv_dark_spline_derivative = djdv_dark_spline.derivative(n=1)
-        # This will create a dataframe with the voltages between the selected range
-        voltage_interval_light = dataframe_light_JV.V[(dataframe_light_JV["V"] >= conductance_shunt_x_min) & (dataframe_light_JV["V"] <= conductance_shunt_x_max)]
-        voltage_interval_light = voltage_interval_light.reset_index(drop=True)
-
-        voltage_interval_dark = dataframe_dark_JV.V[(dataframe_dark_JV["V"] >= conductance_shunt_x_min) & (dataframe_dark_JV["V"] <= conductance_shunt_x_max)]
-        voltage_interval_dark = voltage_interval_dark.reset_index(drop=True)
-
-        if plot_light_JV:  # If the user selected to process Light JV data, plot the light JV data
+        if plot_light_JV:
+            # Creating an interpolation of the light JV
+            djdv_light_spline = interpolate.InterpolatedUnivariateSpline(dataframe_light_JV.V, dataframe_light_JV.I)
+            # Calculating the derivative to the n=1 degree (1st degree)
+            djdv_light_spline_derivative = djdv_light_spline.derivative(n=1)
+            # This will create a dataframe with the voltages between the selected range
+            voltage_interval_light = dataframe_light_JV.V[(dataframe_light_JV["V"] >= conductance_shunt_x_min) & (dataframe_light_JV["V"] <= conductance_shunt_x_max)]
+            voltage_interval_light = voltage_interval_light.reset_index(drop=True)
+            # Linear regression to calculate the shunt conductance
+            djdv_light_lin_regress = stats.linregress(voltage_interval_light, djdv_light_spline_derivative(voltage_interval_light))
+            djdv_light_slope = djdv_light_lin_regress.slope  # The slope will be the shunt conductance
+            djdv_light_rsquared = djdv_light_lin_regress.rvalue**2  # Calculates the r-squared
             pen = pg.mkPen(color=(255, 0, 0), width=3)  # To change the color of the plot, you need assign a color to the "pen". In this case (RGB) 255, 0, 0 is RED.
             # The width is also changed to 3 px wide
-            self.djdv_plot.plot(voltage_interval_light, djdv_light_spline_derivative(voltage_interval_light), name="Light dJdV", pen=pen, symbol='o', symbolSize=5, symbolBrush='r')  # if plot_dark_JV else None
-
-        if plot_dark_JV:  # If the user selected to process Dark JV data, plot the Dark JV data
+            self.djdv_plot.plot(voltage_interval_light, djdv_light_spline_derivative(voltage_interval_light), name="Light dJdV", pen=pen, symbol='o', symbolSize=5, symbolBrush='r')
+            pen = pg.mkPen(color=(0, 0, 255), width=3)
+            self.djdv_plot.plot(voltage_interval_light, djdv_light_lin_regress.intercept + djdv_light_lin_regress.slope * voltage_interval_light, name="Light Linear Regression", pen=pen, symbol="o", symbolSize=5, symboBrush="b")
+        else:
+            # If the user does not want to analyse the light JV data, these variables will be filled with 0
+            djdv_light_slope = 0
+            djdv_light_rsquared = 0
+            
+        if plot_dark_JV:
+            # Creating an interpolation of the dark JV
+            djdv_dark_spline = interpolate.InterpolatedUnivariateSpline(dataframe_dark_JV.V, dataframe_dark_JV.I)
+            # Calculating the derivative to the n=1 degree (1st degree)
+            djdv_dark_spline_derivative = djdv_dark_spline.derivative(n=1)
+            # This will create a dataframe with the voltages between the selected range
+            voltage_interval_dark = dataframe_dark_JV.V[(dataframe_dark_JV["V"] >= conductance_shunt_x_min) & (dataframe_dark_JV["V"] <= conductance_shunt_x_max)]
+            voltage_interval_dark = voltage_interval_dark.reset_index(drop=True)
+            djdv_dark_lin_regress = stats.linregress(voltage_interval_dark, djdv_dark_spline_derivative(voltage_interval_dark))
+            djdv_dark_slope = djdv_dark_lin_regress.slope
+            djdv_dark_rsquared = djdv_dark_lin_regress.rvalue**2
             pen = pg.mkPen(color=(0, 0, 0), width=3)  # Changing the pen color back to black, in order to plot the Dark JV data.
             self.djdv_plot.plot(voltage_interval_dark, djdv_dark_spline_derivative(voltage_interval_dark), name="Dark dJdV", pen=pen, symbol='o', symbolSize=5, symbolBrush='k')
+            pen = pg.mkPen(color=(0, 255, 0), width=3)
+            self.djdv_plot.plot(voltage_interval_dark, djdv_dark_lin_regress.intercept + djdv_dark_lin_regress.slope * voltage_interval_dark, name="Dark Linear Regression", pen=pen, symbol="o", symbolSize=5, symboBrush="g")
+           
+        else:
+            # If the user does not want to analyse the dark JV data, these variables will be filled with 0
+            djdv_dark_slope = 0
+            djdv_dark_rsquared = 0
+
+        djdv_results = dict({"djdv_light_slope": djdv_light_slope, "djdv_light_rsquared": djdv_light_rsquared, "djdv_dark_slope": djdv_dark_slope, "djdv_dark_rsquared": djdv_dark_rsquared})
+        # For the values calculated by the advanced analysis
+        self.result_rshlight.setText(str(round(djdv_results["djdv_light_slope"], 2)))
+        self.result_rshlight_rsquared.setText(str(round(djdv_results["djdv_light_rsquared"], 3)))
+        self.result_rshdark.setText(str(round(djdv_results["djdv_dark_slope"], 2)))
+        self.result_rshdark_rsquared.setText(str(round(djdv_results["djdv_dark_rsquared"], 3)))
+
+        return djdv_results
+
+    def update_dvdj_plot(self,dataframe_light_JV, dataframe_dark_JV, plot_light_JV, plot_dark_JV):
+
+        self.dvdj_plot.clear()
+        self.dvdj_plot.addLegend()
+
+        conductance_series_x_min = self.spin_ideality_min.value()
+        conductance_series_x_max = self.spin_ideality_max.value()
+
 
     def compute_fom(self, dataframe_light_JV):
         # The aim of this function is to calculate the Figures-Of-Merit of the solar cell from the input data. Jsc, Voc, FF, efficiency, etc.
@@ -320,7 +356,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         return figures_of_merit
 
-    def update_gui_figures_of_merit(self,fom_dataframe):
+    def update_gui_results(self, fom_dataframe):
 
         # This code will add the previously calculated figures of merit into the GUI. It will also round the numbers to 2 or 3 decimals
         self.result_voc.setText(str(round(fom_dataframe["voltage_open_circuit"][0], 3)))
@@ -335,13 +371,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.result_gs.setText(str(round(fom_dataframe["conductance_series"][0], 2)))
         self.result_gs_squared.setText(str(round(fom_dataframe["conductance_series_rsquared"][0], 3)))
 
+
+
     def refresh_analysis(self):
         # Before changing the  analysis, the program needs to check if there is any data loaded. If there is, the refresh_analysis() function will proceed normally
         # If not, it will throw an error at the user
         try:
             dataframe_light_JV = self.data[0]  # the light JV data sits in the 1st position of the tuple
             dataframe_dark_JV = self.data[1]  # the dark JV data sits in the 2nd position of the tuple
-            self.update_djdv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
+            self.djdv_results = self.update_djdv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
+
         except:
             error_dialog = QMessageBox()
             error_dialog.setIcon(QMessageBox.Critical)
@@ -349,6 +388,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             error_dialog.setInformativeText("Please load the J-V data first.")
             error_dialog.setWindowTitle("Error!")
             error_dialog.exec_()
+
 def main():
     app = QtWidgets.QApplication(sys.argv)
     main = MainWindow()

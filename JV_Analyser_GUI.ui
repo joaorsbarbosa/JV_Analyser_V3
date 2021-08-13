@@ -581,7 +581,7 @@
         </rect>
        </property>
        <property name="text">
-        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;R&lt;span style=&quot; vertical-align:sub;&quot;&gt;SH&lt;/span&gt; (kΩ • cm&lt;span style=&quot; vertical-align:super;&quot;&gt;2&lt;/span&gt;)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        <string>G&lt;sub&gt;SH&lt;/sub&gt; (mS/cm&lt;sup&gt;2&lt;/sup&gt;)</string>
        </property>
       </widget>
       <widget class="QLabel" name="label_a1light">
@@ -1199,7 +1199,7 @@
      <enum>QTabWidget::Triangular</enum>
     </property>
     <property name="currentIndex">
-     <number>1</number>
+     <number>0</number>
     </property>
     <widget class="QWidget" name="plots_tab">
      <attribute name="title">
