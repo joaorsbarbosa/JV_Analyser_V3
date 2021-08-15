@@ -349,18 +349,47 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             dvdj_dark_rsquared = 0
             A1_dark = 0
 
-        dvdj_results = dict({"dvdj_light_series_conductance": dvdj_light_intercept, "dvdj_light_rsquared": dvdj_light_rsquared, "A1_light": A1_light,
-                             "dvdj_dark_series_conductance": dvdj_dark_intercept, "djdv_dark_rsquared": dvdj_dark_rsquared, "A1_dark": A1_dark})
+        dvdj_results = dict({"dvdj_light_series_resistance": dvdj_light_intercept, "dvdj_light_rsquared": dvdj_light_rsquared, "A1_light": A1_light,
+                             "dvdj_dark_series_resistance": dvdj_dark_intercept, "djdv_dark_rsquared": dvdj_dark_rsquared, "A1_dark": A1_dark})
 
-        self.result_gslight.setText(str(round(dvdj_results["dvdj_light_series_conductance"],2)))
+        self.result_gslight.setText(str(round(dvdj_results["dvdj_light_series_resistance"],2)))
         self.result_gslight_rsquared.setText(str(round(dvdj_results["dvdj_light_rsquared"],3)))
         self.result_a1light.setText(str(round(A1_light,2)))
 
-        self.result_gsdark.setText(str(round(dvdj_results["dvdj_dark_series_conductance"],2)))
+        self.result_gsdark.setText(str(round(dvdj_results["dvdj_dark_series_resistance"],2)))
         self.result_gsdark_rsquared.setText(str(round(dvdj_results["djdv_dark_rsquared"],3)))
         self.result_a1dark.setText(str(round(A1_dark,2)))
 
         return dvdj_results
+
+    def update_jjv_plot(self,dataframe_light_JV, dataframe_dark_JV, light_series_resistance, dark_series_resistance, shunt_conductance_light, shunt_conductance_dark, plot_light_JV, plot_dark_JV):
+
+       
+        if plot_light_JV:
+            voltage_interval_light = dataframe_light_JV.V[dataframe_light_JV["V"] >= 0]
+            voltage_interval_light = voltage_interval_light.reset_index(drop=True)
+
+            V_RJ_light = dataframe_light_JV.V - light_series_resistance * dataframe_light_JV.I / 1000
+
+            current_spline_light = interpolate.InterpolatedUnivariateSpline(dataframe_light_JV.V, dataframe_light_JV.I)
+            current_short_circuit_light = abs(current_spline_light(0))
+            jjsc_gv_light = (current_spline_light(voltage_interval_light) + current_short_circuit_light - shunt_conductance_light * voltage_interval_light)
+
+            print(V_RJ_light)
+        else:
+            print("bla")
+
+        if plot_dark_JV:
+            voltage_interval_dark = dataframe_dark_JV.V[dataframe_dark_JV["V"] >= 0]
+            voltage_interval_dark = voltage_interval_dark.reset_index(drop=True)
+            
+            V_RJ_dark = dataframe_dark_JV.V - dark_series_resistance * dataframe_dark_JV.I / 1000
+
+            current_spline_dark = interpolate.InterpolatedUnivariateSpline(dataframe_dark_JV.V, dataframe_dark_JV.I)
+            current_short_circuit_dark = abs(current_spline_dark(0))
+        else:
+            print("bla")
+
     def compute_fom(self, dataframe_light_JV):
         # The aim of this function is to calculate the Figures-Of-Merit of the solar cell from the input data. Jsc, Voc, FF, efficiency, etc.
         # It used data from the LIGHT J-V CURVE!!
@@ -487,6 +516,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.djdv_results = self.update_djdv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
         # Feeds the Light and Dark J-V data, as well as the shunt conductance in order for the GV correction
         self.dvdj_results = self.update_dvdj_plot(dataframe_light_JV, dataframe_dark_JV,self.djdv_results["djdv_light_condutance"],self.djdv_results["djdv_dark_condutance"], self.plot_light_JV, self.plot_dark_JV)
+
+       # self_jjv_results = self.update_jjv_plot(dataframe_light_JV, dataframe_dark_JV, self.dvdj_results["dvdj_light_series_resistance"], self.dvdj_results["dvdj_dark_series_resistance"],
+        #                                        self.djdv_results["djdv_light_condutance"], self.djdv_results["djdv_dark_condutance"], self.plot_light_JV,self.plot_dark_JV)
 def main():
     app = QtWidgets.QApplication(sys.argv)
     main = MainWindow()
