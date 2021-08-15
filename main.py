@@ -14,6 +14,10 @@ from scipy import constants
 import math
 import numpy as np
 
+# TODO: Add standard errors of slope and intercepts
+# TODO: Add option for -GV correction on dVdJ plot
+
+
 ##########################################
 ############ CONFIGURATIONS ##############
 ##########################################
@@ -38,22 +42,22 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         #In order for the program to open with the plots with the correct axis names, etc, it needs to be set before the signals part of the code.
         self.jv_plot.setLabel("left", "<span style=\"color:black;font-size:18px\">J (mA/cm<sup>2</sup>)</span>")
-        self.jv_plot.setLabel("bottom","<span style=\"color:black;font-size:18px\">V (V)</span>")
+        self.jv_plot.setLabel("bottom", "<span style=\"color:black;font-size:18px\">V (V)</span>")
         self.jv_plot.showGrid(x=True, y=True)
 
 
         self.djdv_plot.setLabel("left", "<span style=\"color:black;font-size:18px\">dJ/dV (mS cm <sup>-2</sup>)</span>")
-        self.djdv_plot.setLabel("bottom","<span style=\"color:black;font-size:18px\">V (V)</span>")
+        self.djdv_plot.setLabel("bottom", "<span style=\"color:black;font-size:18px\">V (V)</span>")
         self.djdv_plot.showGrid(x=True, y=True)
 
         self.dvdj_plot.setLabel("left", "<span style=\"color:black;font-size:18px\">dV/dJ (Ω cm <sup>2</sup>)</span>")
-        self.dvdj_plot.setLabel("bottom", "<span style=\"color:black;font-size:18px\">(J+J<sub>SC</sub>)<sup>-1</sup> (mA<sup>-1</sup> cm<sup>2</sup>)</span>")
+        self.dvdj_plot.setLabel("bottom", "<span style=\"color:black;font-size:18px\">(J+J<sub>SC</sub>-GV)<sup>-1</sup> (mA<sup>-1</sup> cm<sup>2</sup>)</span>")
         self.dvdj_plot.showGrid(x=True, y=True)
 
         self.jjsc_plot.setLabel("left", "<span style=\"color:black;font-size:18px\">J+J<sub>SC</sub>-GV (mA/cm<sup>2</sup>)</span>")
-        self.jjsc_plot.setLabel("bottom","<span style=\"color:black;font-size:18px\">V-RJ (V)</span>")
+        self.jjsc_plot.setLabel("bottom", "<span style=\"color:black;font-size:18px\">V-RJ (V)</span>")
         self.jjsc_plot.showGrid(x=True, y=True)
-
+        self.jjsc_plot.setLogMode(False, True)
         # Some additional plots will be added, so the user can check the quality of the fits.
         # The settings of the plots will be defined
 
@@ -249,16 +253,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             djdv_dark_slope = 0
             djdv_dark_rsquared = 0
 
-        djdv_results = dict({"djdv_light_slope": djdv_light_slope, "djdv_light_rsquared": djdv_light_rsquared, "djdv_dark_slope": djdv_dark_slope, "djdv_dark_rsquared": djdv_dark_rsquared})
+        djdv_results = dict({"djdv_light_condutance": djdv_light_slope, "djdv_light_rsquared": djdv_light_rsquared, "djdv_dark_condutance": djdv_dark_slope, "djdv_dark_rsquared": djdv_dark_rsquared})
         # For the values calculated by the advanced analysis
-        self.result_rshlight.setText(str(round(djdv_results["djdv_light_slope"], 2)))
+        self.result_rshlight.setText(str(round(djdv_results["djdv_light_condutance"], 2)))
         self.result_rshlight_rsquared.setText(str(round(djdv_results["djdv_light_rsquared"], 3)))
-        self.result_rshdark.setText(str(round(djdv_results["djdv_dark_slope"], 2)))
+        self.result_rshdark.setText(str(round(djdv_results["djdv_dark_condutance"], 2)))
         self.result_rshdark_rsquared.setText(str(round(djdv_results["djdv_dark_rsquared"], 3)))
 
         return djdv_results
 
-    def update_dvdj_plot(self,dataframe_light_JV, dataframe_dark_JV, plot_light_JV, plot_dark_JV):
+    def update_dvdj_plot(self,dataframe_light_JV, dataframe_dark_JV,shunt_conductance_light, shunt_conductance_dark, plot_light_JV, plot_dark_JV):
 
         # Lab's temperature for ideality factor calculation:
         T = 296.15  # 23℃
@@ -270,7 +274,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         conductance_series_x_min = self.spin_ideality_min.value()
         conductance_series_x_max = self.spin_ideality_max.value()
-        
+        # TODO: Fix spin wheel crash when min >  max
         if plot_light_JV:
             # The voltage range is adjusted in accordance to the user's input
             voltage_interval_light = dataframe_light_JV.V[(dataframe_light_JV["V"] >= conductance_series_x_min) & (dataframe_light_JV["V"] <= conductance_series_x_max)]
@@ -281,16 +285,33 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             current_spline_light = interpolate.InterpolatedUnivariateSpline(dataframe_light_JV.V, dataframe_light_JV.I)
             current_short_circuit_light = abs(current_spline_light(0))
             # The (J+Jsc)^-1 is calculated
-            jjsc_light = (current_spline_light(voltage_interval_light)+current_short_circuit_light)** (-1)
+            # The X axis is calculated with the -GV correction, per Hegedus et. al. paper
+            jjsc_light = (current_spline_light(voltage_interval_light) + current_short_circuit_light - shunt_conductance_light * voltage_interval_light) ** (-1)
             # The 1st value of this array needs to be dropped, as the np.diff does not calculate the difference of the 1st value
-            jjsc_light = np.delete(jjsc_light,0)
+            jjsc_light = jjsc_light.to_numpy()  # The -GV operation will transform the numpy array back into a pandas series. Therefore, it needs to be transformed into a ndarray
+            jjsc_light = np.delete(jjsc_light, 0) # Eliminates the 1st value in order to correct the array's lengths
             # Now the derivative dV/dJ is calculated. numpy diff is used instead of pandas diff, since the later will return a NaN in the first row
-            dVdJ_light = np.diff(voltage_interval_light)/np.diff(current_interval_light)*1000 # multiplying by a thousand to go from kΩ to Ω
+            dVdJ_light = np.diff(voltage_interval_light)/np.diff(current_interval_light)*1000  # multiplying by a thousand to go from kΩ to Ω
 
+            dvdj_light_lin_regress = stats.linregress(jjsc_light, dVdJ_light)  # Calculating the linear regression
+            dvdj_light_slope = dvdj_light_lin_regress.slope  # The slope will be used to calculate the ideality factor
+            dvdj_light_intercept = dvdj_light_lin_regress.intercept  # The intercept will be the shunt conductance
+            # dvdj_light_intercept_stderr = dvdj_light_lin_regress.intercept_stderr # Standard error
+            dvdj_light_rsquared = dvdj_light_lin_regress.rvalue ** 2  # Calculates the r-squared
+            # For the ideality factor calculation
+            A1_light = (dvdj_light_slope * q) / (k * T) / 1000
+
+            # Plot
             pen = pg.mkPen(color=(255, 0, 0), width=3)  # To change the color of the plot, you need assign a color to the "pen". In this case (RGB) 255, 0, 0 is RED.
             # The width is also changed to 3 px wide
             self.dvdj_plot.plot(jjsc_light, dVdJ_light, name="Light", pen=pen, symbol='o', symbolSize=5, symbolBrush='r')
-
+        
+        else:
+            dvdj_light_slope = 0
+            dvdj_light_intercept = 0
+            dvdj_light_rsquared = 0
+            A1_light = 0
+            
         if plot_dark_JV:
 
             # The voltage range is adjusted in accordance to the user's input
@@ -303,14 +324,43 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             current_spline_dark = interpolate.InterpolatedUnivariateSpline(dataframe_dark_JV.V, dataframe_dark_JV.I)
             current_short_circuit_dark = abs(current_spline_dark(0))
             # The (J+Jsc)^-1 is calculated
-            jjsc_dark = (current_spline_dark(voltage_interval_dark) + current_short_circuit_dark) ** (-1)
+            jjsc_dark = (current_spline_dark(voltage_interval_dark) + current_short_circuit_dark - shunt_conductance_dark * voltage_interval_dark) ** (-1)
+            jjsc_dark = jjsc_dark.to_numpy()  # The -GV operation will transform the numpy array back into a pandas series. Therefore, it needs to be transformed into a ndarray
             # The 1st value of this array needs to be dropped, as the np.diff does not calculate the difference of the 1st value
             jjsc_dark = np.delete(jjsc_dark, 0)
             # Now the derivative dV/dJ is calculated. numpy diff is used instead of pandas diff, since the later will return a NaN in the first row
             dVdJ_dark = np.diff(voltage_interval_dark) / np.diff(current_interval_dark)*1000 # multiplying by a thousand to go from kΩ to Ω
+
+            dvdj_dark_lin_regress = stats.linregress(jjsc_dark, dVdJ_dark) # Calculating the linear regression
+            dvdj_dark_slope = dvdj_dark_lin_regress.slope  # The slope will be used to calculate the ideality factor
+            dvdj_dark_intercept = dvdj_dark_lin_regress.intercept  # The intercept will be the shunt conductance
+            # dvdj_dark_intercept_stderr = dvdj_dark_lin_regress.intercept_stderr # Standard error
+            dvdj_dark_rsquared = dvdj_dark_lin_regress.rvalue ** 2  # Calculates the r-squared
+            # For the ideality factor calculation
+            A1_dark = dvdj_dark_slope * q / (k * T)/1000
+
+            # Plot
             pen = pg.mkPen(color=(0, 0, 0), width=3)
             self.dvdj_plot.plot(jjsc_dark, dVdJ_dark, name="Dark", pen=pen, symbol='o', symbolSize=5, symbolBrush='k')
+        else:
+            
+            dvdj_dark_slope = 0
+            dvdj_dark_intercept = 0
+            dvdj_dark_rsquared = 0
+            A1_dark = 0
 
+        dvdj_results = dict({"dvdj_light_series_conductance": dvdj_light_intercept, "dvdj_light_rsquared": dvdj_light_rsquared, "A1_light": A1_light,
+                             "dvdj_dark_series_conductance": dvdj_dark_intercept, "djdv_dark_rsquared": dvdj_dark_rsquared, "A1_dark": A1_dark})
+
+        self.result_gslight.setText(str(round(dvdj_results["dvdj_light_series_conductance"],2)))
+        self.result_gslight_rsquared.setText(str(round(dvdj_results["dvdj_light_rsquared"],3)))
+        self.result_a1light.setText(str(round(A1_light,2)))
+
+        self.result_gsdark.setText(str(round(dvdj_results["dvdj_dark_series_conductance"],2)))
+        self.result_gsdark_rsquared.setText(str(round(dvdj_results["djdv_dark_rsquared"],3)))
+        self.result_a1dark.setText(str(round(A1_dark,2)))
+
+        return dvdj_results
     def compute_fom(self, dataframe_light_JV):
         # The aim of this function is to calculate the Figures-Of-Merit of the solar cell from the input data. Jsc, Voc, FF, efficiency, etc.
         # It used data from the LIGHT J-V CURVE!!
@@ -435,7 +485,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         dataframe_light_JV = self.data[0]  # the light JV data sits in the 1st position of the tuple
         dataframe_dark_JV = self.data[1]  # the dark JV data sits in the 2nd position of the tuple
         self.djdv_results = self.update_djdv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
-        self.dvdj_results = self.update_dvdj_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
+        # Feeds the Light and Dark J-V data, as well as the shunt conductance in order for the GV correction
+        self.dvdj_results = self.update_dvdj_plot(dataframe_light_JV, dataframe_dark_JV,self.djdv_results["djdv_light_condutance"],self.djdv_results["djdv_dark_condutance"], self.plot_light_JV, self.plot_dark_JV)
 def main():
     app = QtWidgets.QApplication(sys.argv)
     main = MainWindow()

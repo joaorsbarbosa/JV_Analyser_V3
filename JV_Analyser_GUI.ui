@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1391</width>
-    <height>897</height>
+    <width>1395</width>
+    <height>906</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -539,7 +539,7 @@
       </font>
      </property>
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="analysis_results_light">
       <attribute name="title">
@@ -568,7 +568,7 @@
         </rect>
        </property>
        <property name="text">
-        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;G&lt;span style=&quot; vertical-align:sub;&quot;&gt;S&lt;/span&gt; (mS/cm&lt;span style=&quot; vertical-align:super;&quot;&gt;2&lt;/span&gt;)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        <string>R&lt;sub&gt;S&lt;/sub&gt; (Ω • cm&lt;sup&gt;2&lt;/sup&gt;)</string>
        </property>
       </widget>
       <widget class="QLabel" name="label_rshlight">
@@ -648,7 +648,7 @@
         <string>0.00</string>
        </property>
       </widget>
-      <widget class="QLineEdit" name="lineEdit_a1light">
+      <widget class="QLineEdit" name="result_a1light">
        <property name="geometry">
         <rect>
          <x>120</x>
@@ -667,7 +667,7 @@
         <string>0.00</string>
        </property>
       </widget>
-      <widget class="QLineEdit" name="lineEdit_a2light">
+      <widget class="QLineEdit" name="result_a2light">
        <property name="geometry">
         <rect>
          <x>120</x>
@@ -686,7 +686,7 @@
         <string>0.00</string>
        </property>
       </widget>
-      <widget class="QLineEdit" name="lineEdit_j0light">
+      <widget class="QLineEdit" name="result_j0light">
        <property name="geometry">
         <rect>
          <x>120</x>
@@ -830,7 +830,7 @@
         </rect>
        </property>
        <property name="text">
-        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;R&lt;span style=&quot; vertical-align:sub;&quot;&gt;SH&lt;/span&gt; (kΩ • cm&lt;span style=&quot; vertical-align:super;&quot;&gt;2&lt;/span&gt;)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        <string>G&lt;sub&gt;SH&lt;/sub&gt; (mS/cm&lt;sup&gt;2&lt;/sup&gt;)</string>
        </property>
       </widget>
       <widget class="QLineEdit" name="result_rshdark">
@@ -894,7 +894,7 @@
         </rect>
        </property>
        <property name="text">
-        <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;G&lt;span style=&quot; vertical-align:sub;&quot;&gt;S&lt;/span&gt; (mS/cm&lt;span style=&quot; vertical-align:super;&quot;&gt;2&lt;/span&gt;)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        <string>R&lt;sub&gt;S&lt;/sub&gt; (Ω • cm&lt;sup&gt;2&lt;/sup&gt;)</string>
        </property>
       </widget>
       <widget class="QLineEdit" name="result_a1dark">
@@ -1448,7 +1448,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1391</width>
+     <width>1395</width>
      <height>21</height>
     </rect>
    </property>
