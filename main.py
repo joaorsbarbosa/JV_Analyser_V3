@@ -263,9 +263,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         return djdv_results
 
     def update_dvdj_plot(self,dataframe_light_JV, dataframe_dark_JV,shunt_conductance_light, shunt_conductance_dark, plot_light_JV, plot_dark_JV):
-
+        # TODO: Add lin regress plot
         # Lab's temperature for ideality factor calculation:
-        T = 296.15  # 23℃
+        T = 293.15  # 20℃
         q = constants.elementary_charge
         k = constants.k
 
