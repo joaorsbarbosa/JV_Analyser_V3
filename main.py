@@ -263,7 +263,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         return djdv_results
 
     def update_dvdj_plot(self,dataframe_light_JV, dataframe_dark_JV,shunt_conductance_light, shunt_conductance_dark, plot_light_JV, plot_dark_JV):
-        # TODO: Add lin regress plot
+
         # Lab's temperature for ideality factor calculation:
         T = 293.15  # 20℃
         q = constants.elementary_charge
@@ -272,14 +272,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.dvdj_plot.clear()
         self.dvdj_plot.addLegend()
 
-        conductance_series_x_min = self.spin_ideality_min.value()
-        conductance_series_x_max = self.spin_ideality_max.value()
+        dvdj_x_min = self.spin_ideality_min.value()
+        dvdj_x_max = self.spin_ideality_max.value()
+
         # TODO: Fix spin wheel crash when min >  max
         if plot_light_JV:
             # The voltage range is adjusted in accordance to the user's input
-            voltage_interval_light = dataframe_light_JV.V[(dataframe_light_JV["V"] >= conductance_series_x_min) & (dataframe_light_JV["V"] <= conductance_series_x_max)]
+            voltage_interval_light = dataframe_light_JV.V[(dataframe_light_JV["V"] >= dvdj_x_min) & (dataframe_light_JV["V"] <= dvdj_x_max)]
             voltage_interval_light = voltage_interval_light.reset_index(drop=True)
-            current_interval_light = dataframe_light_JV.I[(dataframe_light_JV["V"] >= conductance_series_x_min) & (dataframe_light_JV["V"] <= conductance_series_x_max)]
+            current_interval_light = dataframe_light_JV.I[(dataframe_light_JV["V"] >= dvdj_x_min) & (dataframe_light_JV["V"] <= dvdj_x_max)]
             current_interval_light = current_interval_light.reset_index(drop=True)
             # Now the short circuit current will be calculated
             current_spline_light = interpolate.InterpolatedUnivariateSpline(dataframe_light_JV.V, dataframe_light_JV.I)
@@ -305,7 +306,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             pen = pg.mkPen(color=(255, 0, 0), width=3)  # To change the color of the plot, you need assign a color to the "pen". In this case (RGB) 255, 0, 0 is RED.
             # The width is also changed to 3 px wide
             self.dvdj_plot.plot(jjsc_light, dVdJ_light, name="Light", pen=pen, symbol='o', symbolSize=5, symbolBrush='r')
-        
+            pen = pg.mkPen(color=(0, 0, 255), width=3)
+            self.dvdj_plot.plot(jjsc_light, dvdj_light_lin_regress.intercept + dvdj_light_lin_regress.slope * jjsc_light, name="Light Linear Regression", pen=pen, symbol="o", symbolSize=5, symboBrush="b")
+
+
         else:
             dvdj_light_slope = 0
             dvdj_light_intercept = 0
@@ -315,9 +319,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if plot_dark_JV:
 
             # The voltage range is adjusted in accordance to the user's input
-            voltage_interval_dark = dataframe_dark_JV.V[(dataframe_dark_JV["V"] >= conductance_series_x_min) & (dataframe_dark_JV["V"] <= conductance_series_x_max)]
+            voltage_interval_dark = dataframe_dark_JV.V[(dataframe_dark_JV["V"] >= dvdj_x_min) & (dataframe_dark_JV["V"] <= dvdj_x_max)]
             voltage_interval_dark = voltage_interval_dark.reset_index(drop=True)
-            current_interval_dark = dataframe_dark_JV.I[(dataframe_dark_JV["V"] >= conductance_series_x_min) & (dataframe_dark_JV["V"] <= conductance_series_x_max)]
+            current_interval_dark = dataframe_dark_JV.I[(dataframe_dark_JV["V"] >= dvdj_x_min) & (dataframe_dark_JV["V"] <= dvdj_x_max)]
             current_interval_dark = current_interval_dark.reset_index(drop=True)
 
             # Now the short circuit current will be calculated
@@ -342,6 +346,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # Plot
             pen = pg.mkPen(color=(0, 0, 0), width=3)
             self.dvdj_plot.plot(jjsc_dark, dVdJ_dark, name="Dark", pen=pen, symbol='o', symbolSize=5, symbolBrush='k')
+            pen = pg.mkPen(color=(0, 255, 0), width=3)
+            self.dvdj_plot.plot(jjsc_dark, dvdj_dark_lin_regress.intercept + dvdj_dark_lin_regress.slope * jjsc_dark, name="Dark Linear Regression", pen=pen, symbol="o", symbolSize=5, symboBrush="g")
         else:
             
             dvdj_dark_slope = 0
@@ -363,18 +369,28 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         return dvdj_results
 
     def update_jjv_plot(self,dataframe_light_JV, dataframe_dark_JV, light_series_resistance, dark_series_resistance, shunt_conductance_light, shunt_conductance_dark, plot_light_JV, plot_dark_JV):
-
+        jjv_x_min = self.spin_ideality_min.value()
+        jjv_x_max = self.spin_ideality_max.value()
        
         if plot_light_JV:
-            voltage_interval_light = dataframe_light_JV.V[dataframe_light_JV["V"] >= 0]
+
+            voltage_interval_light = dataframe_light_JV.V[(dataframe_light_JV["V"] >= jjv_x_min) & (dataframe_light_JV["V"] <= jjv_x_max)]
             voltage_interval_light = voltage_interval_light.reset_index(drop=True)
 
-            V_RJ_light = dataframe_light_JV.V - light_series_resistance * dataframe_light_JV.I / 1000
 
             current_spline_light = interpolate.InterpolatedUnivariateSpline(dataframe_light_JV.V, dataframe_light_JV.I)
             current_short_circuit_light = abs(current_spline_light(0))
-            jjsc_gv_light = (current_spline_light(voltage_interval_light) + current_short_circuit_light - shunt_conductance_light * voltage_interval_light)
 
+            V_RJ_light = dataframe_light_JV.V - light_series_resistance * dataframe_light_JV.I / 1000
+
+            #current_spline_light = interpolate.InterpolatedUnivariateSpline(voltage_interval_light, current_interval_light)
+            jjsc_gv_light = (current_spline_light(dataframe_light_JV.V) + current_short_circuit_light - shunt_conductance_light * dataframe_light_JV.V)
+
+
+            interpolation_x = np.linspace(voltage_interval_light.iloc[0], voltage_interval_light.iloc[-1], len(voltage_interval_light) * 5)  # The number of points plotted will be 5 times greater than those in the original data
+            pen = pg.mkPen(color=(255, 0, 0), width=3)
+            self.jjsc_plot.plot(V_RJ_light, jjsc_gv_light, name="Interpolated Data", pen=pen, symbol="o", symbolSize=5, symbolBrush='b')
+            #jjsc_light = (current_spline_light(voltage_interval_light) + current_short_circuit_light - shunt_conductance_light * voltage_interval_light) ** (-1)
             print(V_RJ_light)
         else:
             print("bla")
@@ -517,8 +533,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Feeds the Light and Dark J-V data, as well as the shunt conductance in order for the GV correction
         self.dvdj_results = self.update_dvdj_plot(dataframe_light_JV, dataframe_dark_JV,self.djdv_results["djdv_light_condutance"],self.djdv_results["djdv_dark_condutance"], self.plot_light_JV, self.plot_dark_JV)
 
-       # self_jjv_results = self.update_jjv_plot(dataframe_light_JV, dataframe_dark_JV, self.dvdj_results["dvdj_light_series_resistance"], self.dvdj_results["dvdj_dark_series_resistance"],
-        #                                        self.djdv_results["djdv_light_condutance"], self.djdv_results["djdv_dark_condutance"], self.plot_light_JV,self.plot_dark_JV)
+        self.jjv_results = self.update_jjv_plot(dataframe_light_JV, dataframe_dark_JV, self.dvdj_results["dvdj_light_series_resistance"], self.dvdj_results["dvdj_dark_series_resistance"],
+                                                self.djdv_results["djdv_light_condutance"], self.djdv_results["djdv_dark_condutance"], self.plot_light_JV,self.plot_dark_JV)
+
 def main():
     app = QtWidgets.QApplication(sys.argv)
     main = MainWindow()
