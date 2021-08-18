@@ -58,6 +58,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.jjsc_plot.setLabel("bottom", "<span style=\"color:black;font-size:18px\">V-RJ (V)</span>")
         self.jjsc_plot.showGrid(x=True, y=True)
         self.jjsc_plot.setLogMode(False, True)
+
         # Some additional plots will be added, so the user can check the quality of the fits.
         # The settings of the plots will be defined
 
@@ -385,11 +386,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             #current_spline_light = interpolate.InterpolatedUnivariateSpline(voltage_interval_light, current_interval_light)
             jjsc_gv_light = (current_spline_light(dataframe_light_JV.V) + current_short_circuit_light - shunt_conductance_light * dataframe_light_JV.V)
+            test_voltage = V_RJ_light[jjsc_gv_light > 0]
+            test_voltage = test_voltage.reset_index(drop=True)
+            test_current = jjsc_gv_light[jjsc_gv_light > 0]
+            test_current = test_current.reset_index(drop=True)
 
-
-            interpolation_x = np.linspace(voltage_interval_light.iloc[0], voltage_interval_light.iloc[-1], len(voltage_interval_light) * 5)  # The number of points plotted will be 5 times greater than those in the original data
             pen = pg.mkPen(color=(255, 0, 0), width=3)
-            self.jjsc_plot.plot(V_RJ_light, jjsc_gv_light, name="Interpolated Data", pen=pen, symbol="o", symbolSize=5, symbolBrush='b')
+            self.jjsc_plot.plot(test_voltage, test_current, name="Interpolated Data", pen=pen, symbol="o", symbolSize=5, symbolBrush='r')
+            #self.jjsc_plot.plot(test_voltage, np.log10(test_current), name="Interpolated Data", pen=pen, symbol="o", symbolSize=5, symbolBrush='r')
+
             #jjsc_light = (current_spline_light(voltage_interval_light) + current_short_circuit_light - shunt_conductance_light * voltage_interval_light) ** (-1)
             print(V_RJ_light)
         else:
