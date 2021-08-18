@@ -15,7 +15,7 @@ import math
 import numpy as np
 
 # TODO: Add standard errors of slope and intercepts
-# TODO: Add option for -GV correction on dVdJ plot
+
 
 
 ##########################################
@@ -369,45 +369,81 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         return dvdj_results
 
-    def update_jjv_plot(self,dataframe_light_JV, dataframe_dark_JV, light_series_resistance, dark_series_resistance, shunt_conductance_light, shunt_conductance_dark, plot_light_JV, plot_dark_JV):
-        jjv_x_min = self.spin_ideality_min.value()
-        jjv_x_max = self.spin_ideality_max.value()
+    def update_jjsc_plot(self,dataframe_light_JV, dataframe_dark_JV, light_series_resistance, dark_series_resistance, shunt_conductance_light, shunt_conductance_dark, plot_light_JV, plot_dark_JV):
+
+        self.jjsc_plot.clear()
+        self.jjsc_plot.addLegend()
+        
+        # Getting the voltage values to calculate the ideality factor from the interface
+        jjsc_x_min = self.spin_ideality_min.value()
+        jjsc_x_max = self.spin_ideality_max.value()
        
         if plot_light_JV:
-
-            voltage_interval_light = dataframe_light_JV.V[(dataframe_light_JV["V"] >= jjv_x_min) & (dataframe_light_JV["V"] <= jjv_x_max)]
-            voltage_interval_light = voltage_interval_light.reset_index(drop=True)
-
-
+            # The voltage interval to use for the calculations will be the one stipulated previously by the user.
+            voltage_interval_light = dataframe_light_JV.V[(dataframe_light_JV["V"] >= jjsc_x_min) & (dataframe_light_JV["V"] <= jjsc_x_max)]
+            #voltage_interval_light = voltage_interval_light.reset_index(drop=True)
+            # The Y axis needs the short circuit current, so it's calculated here:
             current_spline_light = interpolate.InterpolatedUnivariateSpline(dataframe_light_JV.V, dataframe_light_JV.I)
             current_short_circuit_light = abs(current_spline_light(0))
-
-            V_RJ_light = dataframe_light_JV.V - light_series_resistance * dataframe_light_JV.I / 1000
-
-            #current_spline_light = interpolate.InterpolatedUnivariateSpline(voltage_interval_light, current_interval_light)
+            # The X axis will the the voltage minus the series resistance multiplied by the short circuit current
+            V_RJ_light = dataframe_light_JV.V - light_series_resistance * dataframe_light_JV.I / 1000  # The division by a thousand is to convert mA to Amps
+            # The Y axis will be the sum of the current with the short circuit current, minus the shunt conductance multiplied by the voltage
             jjsc_gv_light = (current_spline_light(dataframe_light_JV.V) + current_short_circuit_light - shunt_conductance_light * dataframe_light_JV.V)
-            test_voltage = V_RJ_light[jjsc_gv_light > 0]
-            test_voltage = test_voltage.reset_index(drop=True)
-            test_current = jjsc_gv_light[jjsc_gv_light > 0]
-            test_current = test_current.reset_index(drop=True)
+            # The plot will not be restricted by the voltage interval previously defined.
+            # In order to plot the semi-log Y axis, the negative values need to be removed.
+            # Therefore, the voltage displayed will be the voltages corresponding to positive current values
+            V_RJ_light = V_RJ_light[jjsc_gv_light > 0]
+            V_RJ_light_analysis = V_RJ_light  # This is done in order to keep the indexes, so that the data inside the selected voltage can be attained.
+            V_RJ_light = V_RJ_light.reset_index(drop=True)  # The series is re-indexed back to zero
 
+
+            # Same thing is done to the current.
+            jjsc_gv_light = jjsc_gv_light[jjsc_gv_light > 0]
+            jjsc_gv_light_analysis = jjsc_gv_light
+            jjsc_gv_light = jjsc_gv_light.reset_index(drop=True)
+
+
+            jjsc_gv_light_analysis = jjsc_gv_light_analysis.loc[voltage_interval_light.index]
+            V_RJ_light_analysis = V_RJ_light_analysis.loc[voltage_interval_light.index]
+            jjsc_gv_light_analysis = jjsc_gv_light_analysis.reset_index(drop=True)
+            V_RJ_light_analysis = V_RJ_light_analysis.reset_index(drop=True)
+
+            linear_regression = stats.linregress(V_RJ_light_analysis, np.log(jjsc_gv_light_analysis))
+            # TODO: FINISH JJsc A2 and J0
+            # Plotting in red
             pen = pg.mkPen(color=(255, 0, 0), width=3)
-            self.jjsc_plot.plot(test_voltage, test_current, name="Interpolated Data", pen=pen, symbol="o", symbolSize=5, symbolBrush='r')
-            #self.jjsc_plot.plot(test_voltage, np.log10(test_current), name="Interpolated Data", pen=pen, symbol="o", symbolSize=5, symbolBrush='r')
+            self.jjsc_plot.plot(V_RJ_light, jjsc_gv_light, name="Light", pen=pen, symbol="o", symbolSize=5, symbolBrush='r')
+            pen = pg.mkPen(color=(0, 0, 255), width=3)
+            self.jjsc_plot.plot(V_RJ_light_analysis, jjsc_gv_light_analysis, name="Light2", pen=pen, symbol="o", symbolSize=5, symbolBrush='b')
 
-            #jjsc_light = (current_spline_light(voltage_interval_light) + current_short_circuit_light - shunt_conductance_light * voltage_interval_light) ** (-1)
-            print(V_RJ_light)
+           # self.jjsc_plot.plot(V_RJ_light_analysis, linear_regression.intercept + linear_regression.slope*V_RJ_light_analysis,  name="Light Linear Regression", pen=pen, symbol="o", symbolSize=5, symboBrush="g")
+
         else:
             print("bla")
 
         if plot_dark_JV:
-            voltage_interval_dark = dataframe_dark_JV.V[dataframe_dark_JV["V"] >= 0]
+            # The voltage interval to use for the calculations will be the one stipulated previously by the user.
+            voltage_interval_dark = dataframe_dark_JV.V[(dataframe_dark_JV["V"] >= jjsc_x_min) & (dataframe_dark_JV["V"] <= jjsc_x_max)]
             voltage_interval_dark = voltage_interval_dark.reset_index(drop=True)
-            
-            V_RJ_dark = dataframe_dark_JV.V - dark_series_resistance * dataframe_dark_JV.I / 1000
-
+            # The Y axis needs the short circuit current, so it's calculated here:
             current_spline_dark = interpolate.InterpolatedUnivariateSpline(dataframe_dark_JV.V, dataframe_dark_JV.I)
-            current_short_circuit_dark = abs(current_spline_dark(0))
+            current_short_circuit_dark = 0  # Per Hegedus suggestion
+            # The X axis will the the voltage minus the series resistance multiplied by the short circuit current
+            V_RJ_dark = dataframe_dark_JV.V - dark_series_resistance * dataframe_dark_JV.I / 1000  # The division by a thousand is to convert mA to Amps
+            # The Y axis will be the sum of the current with the short circuit current, minus the shunt conductance multiplied by the voltage
+            jjsc_gv_dark = (current_spline_dark(dataframe_dark_JV.V) + current_short_circuit_dark - shunt_conductance_dark * dataframe_dark_JV.V)
+            # The plot will not be restricted by the voltage interval previously defined.
+            # In order to plot the semi-log Y axis, the negative values need to be removed.
+            # Therefore, the voltage displayed will be the voltages corresponding to positive current and voltage values
+            V_RJ_dark = V_RJ_dark[(jjsc_gv_dark > 0) & (V_RJ_dark > 0)]
+            # Same thing is done to the current.
+            jjsc_gv_dark = jjsc_gv_dark[(jjsc_gv_dark > 0) & (V_RJ_dark > 0)]
+            # Since there are two conditions, mixing both data sets in the same condition, the re-indexing of both axis data needs to occur after the conditions, or the resulting data will be mismatched
+            V_RJ_dark = V_RJ_dark.reset_index(drop=True)  # The series is re-indexed back to zero
+            jjsc_gv_dark = jjsc_gv_dark.reset_index(drop=True)
+            # Plotting in black
+            pen = pg.mkPen(color=(0, 0, 0), width=3)
+            self.jjsc_plot.plot(V_RJ_dark, jjsc_gv_dark, name="Dark", pen=pen, symbol="o", symbolSize=5, symbolBrush='k')
         else:
             print("bla")
 
@@ -538,7 +574,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Feeds the Light and Dark J-V data, as well as the shunt conductance in order for the GV correction
         self.dvdj_results = self.update_dvdj_plot(dataframe_light_JV, dataframe_dark_JV,self.djdv_results["djdv_light_condutance"],self.djdv_results["djdv_dark_condutance"], self.plot_light_JV, self.plot_dark_JV)
 
-        self.jjv_results = self.update_jjv_plot(dataframe_light_JV, dataframe_dark_JV, self.dvdj_results["dvdj_light_series_resistance"], self.dvdj_results["dvdj_dark_series_resistance"],
+        self.jjsc_results = self.update_jjsc_plot(dataframe_light_JV, dataframe_dark_JV, self.dvdj_results["dvdj_light_series_resistance"], self.dvdj_results["dvdj_dark_series_resistance"],
                                                 self.djdv_results["djdv_light_condutance"], self.djdv_results["djdv_dark_condutance"], self.plot_light_JV,self.plot_dark_JV)
 
 def main():
