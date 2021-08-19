@@ -301,7 +301,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # dvdj_light_intercept_stderr = dvdj_light_lin_regress.intercept_stderr # Standard error
             dvdj_light_rsquared = dvdj_light_lin_regress.rvalue ** 2  # Calculates the r-squared
             # For the ideality factor calculation
-            A1_light = (dvdj_light_slope * q) / (k * T) / 1000
+            A1_light = ((dvdj_light_slope/ 1000) * q) / (k * T)
 
             # Plot
             pen = pg.mkPen(color=(255, 0, 0), width=3)  # To change the color of the plot, you need assign a color to the "pen". In this case (RGB) 255, 0, 0 is RED.
@@ -371,6 +371,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def update_jjsc_plot(self,dataframe_light_JV, dataframe_dark_JV, light_series_resistance, dark_series_resistance, shunt_conductance_light, shunt_conductance_dark, plot_light_JV, plot_dark_JV):
 
+        # Lab's temperature for ideality factor calculation:
+        T = 293.15  # 20℃
+        q = constants.elementary_charge
+        k = constants.k
+
         self.jjsc_plot.clear()
         self.jjsc_plot.addLegend()
         
@@ -392,13 +397,13 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # The plot will not be restricted by the voltage interval previously defined.
             # In order to plot the semi-log Y axis, the negative values need to be removed.
             # Therefore, the voltage displayed will be the voltages corresponding to positive current values
-            V_RJ_light = V_RJ_light[jjsc_gv_light > 0]
+            V_RJ_light = V_RJ_light[(jjsc_gv_light > 0) & (V_RJ_light > 0)]
+            # Same thing is done to the current.
+            jjsc_gv_light = jjsc_gv_light[(jjsc_gv_light > 0) & (V_RJ_light > 0)]
+
             V_RJ_light_analysis = V_RJ_light  # This is done in order to keep the indexes, so that the data inside the selected voltage can be attained.
             V_RJ_light = V_RJ_light.reset_index(drop=True)  # The series is re-indexed back to zero
 
-
-            # Same thing is done to the current.
-            jjsc_gv_light = jjsc_gv_light[jjsc_gv_light > 0]
             jjsc_gv_light_analysis = jjsc_gv_light
             jjsc_gv_light = jjsc_gv_light.reset_index(drop=True)
 
@@ -409,14 +414,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             V_RJ_light_analysis = V_RJ_light_analysis.reset_index(drop=True)
 
             linear_regression = stats.linregress(V_RJ_light_analysis, np.log(jjsc_gv_light_analysis))
-            # TODO: FINISH JJsc A2 and J0
+
+            A2_light = q / ((linear_regression.slope) * k * T)
+            J0_light = np.exp(linear_regression.intercept)
+            print(A2_light)
+            print(J0_light)
             # Plotting in red
             pen = pg.mkPen(color=(255, 0, 0), width=3)
             self.jjsc_plot.plot(V_RJ_light, jjsc_gv_light, name="Light", pen=pen, symbol="o", symbolSize=5, symbolBrush='r')
             pen = pg.mkPen(color=(0, 0, 255), width=3)
-            self.jjsc_plot.plot(V_RJ_light_analysis, jjsc_gv_light_analysis, name="Light2", pen=pen, symbol="o", symbolSize=5, symbolBrush='b')
+            self.jjsc_plot.plot(V_RJ_light_analysis, jjsc_gv_light_analysis, name="Selected Light", pen=pen, symbol="o", symbolSize=5, symbolBrush='b')
 
-           # self.jjsc_plot.plot(V_RJ_light_analysis, linear_regression.intercept + linear_regression.slope*V_RJ_light_analysis,  name="Light Linear Regression", pen=pen, symbol="o", symbolSize=5, symboBrush="g")
+
 
         else:
             print("bla")
