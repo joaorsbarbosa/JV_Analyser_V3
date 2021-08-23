@@ -1,17 +1,16 @@
-from PyQt5 import QtWidgets, uic
+from PyQt5 import QtWidgets, QtCore, uic
 from PyQt5.QtWidgets import QFileDialog, QMessageBox  # necessary import of the file dialog window
 from pyqtgraph import PlotWidget
 import pyqtgraph as pg
-
 from JV_Analyser_GUI import Ui_MainWindow  # this import will load the .py file with the GUI
 
 import pandas as pd  # Pandas dataframes are a super useful tool to handle and process data.
-import os, sys  # Necessary modules to allow the python code to interact with Windows.
+import os, sys   # Necessary modules to allow the python code to interact with Windows.
 
 from scipy import interpolate
 from scipy import stats
 from scipy import constants
-import math
+
 import numpy as np
 
 # TODO: Add standard errors of slope and intercepts
@@ -28,7 +27,6 @@ import numpy as np
 pg.setConfigOption('background', 'w')  # Sets the background of the plots as WHITE
 pg.setConfigOption('foreground', 'k')  # Sets the lines of the plots as BLACK
 pg.setConfigOptions(antialias=True)  # Makes the lines smoother (removes "stair casing" effect). Purely visual setting. Does not affect the data.
-
 
 # ---------------------------------------#
 
@@ -178,7 +176,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 # this will generate an error which will be handled in the execute_processing function.
                 pass
 
-        light_data.I = light_data.I*1000  # The light current is being multiplied by 1000 in order to convert it from A/cm² to mA/cm²
+        light_data.I = light_data.I * 1000  # The light current is being multiplied by 1000 in order to convert it from A/cm² to mA/cm²
         dark_data.I = dark_data.I * 1000  # The dark current is being multiplied by 1000 in order to convert it from A/cm² to mA/cm²
         return light_data, dark_data
 
@@ -386,7 +384,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if plot_light_JV:
             # The voltage interval to use for the calculations will be the one stipulated previously by the user.
             voltage_interval_light = dataframe_light_JV.V[(dataframe_light_JV["V"] >= jjsc_x_min) & (dataframe_light_JV["V"] <= jjsc_x_max)]
-            #voltage_interval_light = voltage_interval_light.reset_index(drop=True)
             # The Y axis needs the short circuit current, so it's calculated here:
             current_spline_light = interpolate.InterpolatedUnivariateSpline(dataframe_light_JV.V, dataframe_light_JV.I)
             current_short_circuit_light = abs(current_spline_light(0))
@@ -407,33 +404,30 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             jjsc_gv_light_analysis = jjsc_gv_light
             jjsc_gv_light = jjsc_gv_light.reset_index(drop=True)
 
-
+            # Matching the current values to the selected voltage interval for analysis
             jjsc_gv_light_analysis = jjsc_gv_light_analysis.loc[voltage_interval_light.index]
             V_RJ_light_analysis = V_RJ_light_analysis.loc[voltage_interval_light.index]
             jjsc_gv_light_analysis = jjsc_gv_light_analysis.reset_index(drop=True)
             V_RJ_light_analysis = V_RJ_light_analysis.reset_index(drop=True)
 
-            linear_regression = stats.linregress(V_RJ_light_analysis, np.log(jjsc_gv_light_analysis))
+            linear_regression_jjsc = stats.linregress(V_RJ_light_analysis, np.log(jjsc_gv_light_analysis))
 
-            A2_light = q / ((linear_regression.slope) * k * T)
-            J0_light = np.exp(linear_regression.intercept)
-            print(A2_light)
-            print(J0_light)
+            A2_light = q / (linear_regression_jjsc.slope * k * T)
+            J0_light = np.exp(linear_regression_jjsc.intercept)
             # Plotting in red
             pen = pg.mkPen(color=(255, 0, 0), width=3)
             self.jjsc_plot.plot(V_RJ_light, jjsc_gv_light, name="Light", pen=pen, symbol="o", symbolSize=5, symbolBrush='r')
+            # Plotting the selected data
             pen = pg.mkPen(color=(0, 0, 255), width=3)
             self.jjsc_plot.plot(V_RJ_light_analysis, jjsc_gv_light_analysis, name="Selected Light", pen=pen, symbol="o", symbolSize=5, symbolBrush='b')
 
-
-
         else:
-            print("bla")
-
+            A2_light = 0
+            J0_light = 0
         if plot_dark_JV:
+
             # The voltage interval to use for the calculations will be the one stipulated previously by the user.
             voltage_interval_dark = dataframe_dark_JV.V[(dataframe_dark_JV["V"] >= jjsc_x_min) & (dataframe_dark_JV["V"] <= jjsc_x_max)]
-            voltage_interval_dark = voltage_interval_dark.reset_index(drop=True)
             # The Y axis needs the short circuit current, so it's calculated here:
             current_spline_dark = interpolate.InterpolatedUnivariateSpline(dataframe_dark_JV.V, dataframe_dark_JV.I)
             current_short_circuit_dark = 0  # Per Hegedus suggestion
@@ -445,17 +439,49 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # In order to plot the semi-log Y axis, the negative values need to be removed.
             # Therefore, the voltage displayed will be the voltages corresponding to positive current and voltage values
             V_RJ_dark = V_RJ_dark[(jjsc_gv_dark > 0) & (V_RJ_dark > 0)]
+            V_RJ_dark_analysis = V_RJ_dark # This is done in order to keep the indexes, so that the data inside the selected voltage can be attained.
             # Same thing is done to the current.
             jjsc_gv_dark = jjsc_gv_dark[(jjsc_gv_dark > 0) & (V_RJ_dark > 0)]
+            jjsc_gv_dark_analysis = jjsc_gv_dark
+
             # Since there are two conditions, mixing both data sets in the same condition, the re-indexing of both axis data needs to occur after the conditions, or the resulting data will be mismatched
             V_RJ_dark = V_RJ_dark.reset_index(drop=True)  # The series is re-indexed back to zero
             jjsc_gv_dark = jjsc_gv_dark.reset_index(drop=True)
+
+            # Matching the current values to the selected voltage interval for analysis
+            jjsc_gv_dark_analysis = jjsc_gv_dark_analysis.loc[voltage_interval_dark.index]
+            V_RJ_dark_analysis = V_RJ_dark_analysis.loc[voltage_interval_dark.index]
+            jjsc_gv_dark_analysis = jjsc_gv_dark_analysis.reset_index(drop=True)
+            V_RJ_dark_analysis = V_RJ_dark_analysis.reset_index(drop=True)
+
+            linear_regression_jjsc = stats.linregress(V_RJ_dark_analysis, np.log(jjsc_gv_dark_analysis))
+
+            A2_dark = q / (linear_regression_jjsc.slope * k * T)
+            J0_dark = np.exp(linear_regression_jjsc.intercept)
+
             # Plotting in black
             pen = pg.mkPen(color=(0, 0, 0), width=3)
             self.jjsc_plot.plot(V_RJ_dark, jjsc_gv_dark, name="Dark", pen=pen, symbol="o", symbolSize=5, symbolBrush='k')
-        else:
-            print("bla")
+            # Plotting the selected data
+            pen = pg.mkPen(color=(0, 255, 0), width=3)
+            self.jjsc_plot.plot(V_RJ_dark_analysis, jjsc_gv_dark_analysis, name="Selected Dark", pen=pen, symbol="o", symbolSize=5, symbolBrush='g')
 
+        else:
+            A2_dark = 0
+            J0_dark = 0
+
+        jjsc_results = dict({"A2_light": A2_light, "J0_light": J0_light,
+                             "A2_dark": A2_dark, "J0_dark": J0_dark})
+        # TODO: ADD JJSC RESULTS
+        # self.result_gslight.setText(str(round(dvdj_results["dvdj_light_series_resistance"], 2)))
+        # self.result_gslight_rsquared.setText(str(round(dvdj_results["dvdj_light_rsquared"], 3)))
+        # self.result_a1light.setText(str(round(A1_light, 2)))
+        #
+        # self.result_gsdark.setText(str(round(dvdj_results["dvdj_dark_series_resistance"], 2)))
+        # self.result_gsdark_rsquared.setText(str(round(dvdj_results["djdv_dark_rsquared"], 3)))
+        # self.result_a1dark.setText(str(round(A1_dark, 2)))
+
+        return dvdj_results
     def compute_fom(self, dataframe_light_JV):
         # The aim of this function is to calculate the Figures-Of-Merit of the solar cell from the input data. Jsc, Voc, FF, efficiency, etc.
         # It used data from the LIGHT J-V CURVE!!
@@ -587,7 +613,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                                                 self.djdv_results["djdv_light_condutance"], self.djdv_results["djdv_dark_condutance"], self.plot_light_JV,self.plot_dark_JV)
 
 def main():
+
     app = QtWidgets.QApplication(sys.argv)
+    app.setAttribute(QtCore.Qt.AA_Use96Dpi,True)  # Prevents windows DPI thing screwing up with the scaling
+    app.setAttribute(QtCore.Qt.AA_DisableHighDpiScaling, True)  # Prevents windows DPI thing screwing up with the scaling
     main = MainWindow()
     main.show()
     sys.exit(app.exec())
