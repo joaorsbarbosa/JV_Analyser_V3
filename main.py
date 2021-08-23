@@ -218,7 +218,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             voltage_interval_light = dataframe_light_JV.V[(dataframe_light_JV["V"] >= conductance_shunt_x_min) & (dataframe_light_JV["V"] <= conductance_shunt_x_max)]
             voltage_interval_light = voltage_interval_light.reset_index(drop=True)
             # Linear regression to calculate the shunt conductance
-            djdv_light_lin_regress = stats.linregress(voltage_interval_light, djdv_light_spline_derivative(voltage_interval_light))
+            breakpoint()
+            djdv_light_lin_regress = stats.linregress(voltage_interval_light, djdv_light_spline_derivative(voltage_interval_light)) # TODO: USE LINEAR VALUES FORGET DERIVATIVE
             djdv_light_slope = djdv_light_lin_regress.slope  # The slope will be the shunt conductance
             djdv_light_rsquared = djdv_light_lin_regress.rvalue**2  # Calculates the r-squared
             pen = pg.mkPen(color=(255, 0, 0), width=3)  # To change the color of the plot, you need assign a color to the "pen". In this case (RGB) 255, 0, 0 is RED.
@@ -481,7 +482,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # self.result_gsdark_rsquared.setText(str(round(dvdj_results["djdv_dark_rsquared"], 3)))
         # self.result_a1dark.setText(str(round(A1_dark, 2)))
 
-        return dvdj_results
+        return jjsc_results
     def compute_fom(self, dataframe_light_JV):
         # The aim of this function is to calculate the Figures-Of-Merit of the solar cell from the input data. Jsc, Voc, FF, efficiency, etc.
         # It used data from the LIGHT J-V CURVE!!
@@ -603,15 +604,17 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #     error_dialog.setInformativeText("Please load the J-V data first.")
         #     error_dialog.setWindowTitle("Error!")
         #     error_dialog.exec_()
-        dataframe_light_JV = self.data[0]  # the light JV data sits in the 1st position of the tuple
-        dataframe_dark_JV = self.data[1]  # the dark JV data sits in the 2nd position of the tuple
-        self.djdv_results = self.update_djdv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
-        # Feeds the Light and Dark J-V data, as well as the shunt conductance in order for the GV correction
-        self.dvdj_results = self.update_dvdj_plot(dataframe_light_JV, dataframe_dark_JV,self.djdv_results["djdv_light_condutance"],self.djdv_results["djdv_dark_condutance"], self.plot_light_JV, self.plot_dark_JV)
+        try:
+            dataframe_light_JV = self.data[0]  # the light JV data sits in the 1st position of the tuple
+            dataframe_dark_JV = self.data[1]  # the dark JV data sits in the 2nd position of the tuple
+            self.djdv_results = self.update_djdv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
+            # Feeds the Light and Dark J-V data, as well as the shunt conductance in order for the GV correction
+            self.dvdj_results = self.update_dvdj_plot(dataframe_light_JV, dataframe_dark_JV,self.djdv_results["djdv_light_condutance"],self.djdv_results["djdv_dark_condutance"], self.plot_light_JV, self.plot_dark_JV)
 
-        self.jjsc_results = self.update_jjsc_plot(dataframe_light_JV, dataframe_dark_JV, self.dvdj_results["dvdj_light_series_resistance"], self.dvdj_results["dvdj_dark_series_resistance"],
-                                                self.djdv_results["djdv_light_condutance"], self.djdv_results["djdv_dark_condutance"], self.plot_light_JV,self.plot_dark_JV)
-
+            self.jjsc_results = self.update_jjsc_plot(dataframe_light_JV, dataframe_dark_JV, self.dvdj_results["dvdj_light_series_resistance"], self.dvdj_results["dvdj_dark_series_resistance"],
+                                                 self.djdv_results["djdv_light_condutance"], self.djdv_results["djdv_dark_condutance"], self.plot_light_JV,self.plot_dark_JV)
+        except:
+            pass
 def main():
 
     app = QtWidgets.QApplication(sys.argv)
