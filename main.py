@@ -201,6 +201,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.jv_plot.plot(dataframe_dark_JV.V, dataframe_dark_JV.I, name = "Dark J-V", pen=pen, symbol='o', symbolSize=5, symbolBrush='k')
 
     def update_djdv_plot(self,dataframe_light_JV, dataframe_dark_JV, plot_light_JV, plot_dark_JV):
+        # TODO: ADD OPTION TO CHOOSE G FROM JV OR DJDV
 
         self.djdv_plot.clear()
         self.djdv_plot.addLegend()
@@ -218,7 +219,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             voltage_interval_light = dataframe_light_JV.V[(dataframe_light_JV["V"] >= conductance_shunt_x_min) & (dataframe_light_JV["V"] <= conductance_shunt_x_max)]
             voltage_interval_light = voltage_interval_light.reset_index(drop=True)
             # Linear regression to calculate the shunt conductance
-            breakpoint()
+
             djdv_light_lin_regress = stats.linregress(voltage_interval_light, djdv_light_spline_derivative(voltage_interval_light)) # TODO: USE LINEAR VALUES FORGET DERIVATIVE
             djdv_light_slope = djdv_light_lin_regress.slope  # The slope will be the shunt conductance
             djdv_light_rsquared = djdv_light_lin_regress.rvalue**2  # Calculates the r-squared
@@ -421,7 +422,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # Plotting the selected data
             pen = pg.mkPen(color=(0, 0, 255), width=3)
             self.jjsc_plot.plot(V_RJ_light_analysis, jjsc_gv_light_analysis, name="Selected Light", pen=pen, symbol="o", symbolSize=5, symbolBrush='b')
-
+            print("A2_light")
+            print(A2_light)
+            print("J0_light")
+            print(J0_light)
         else:
             A2_light = 0
             J0_light = 0
@@ -466,7 +470,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # Plotting the selected data
             pen = pg.mkPen(color=(0, 255, 0), width=3)
             self.jjsc_plot.plot(V_RJ_dark_analysis, jjsc_gv_dark_analysis, name="Selected Dark", pen=pen, symbol="o", symbolSize=5, symbolBrush='g')
-
+            print("J0_dark")
+            print(J0_dark)
         else:
             A2_dark = 0
             J0_dark = 0
