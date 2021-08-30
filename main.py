@@ -6,13 +6,11 @@ from JV_Analyser_GUI import Ui_MainWindow  # this import will load the .py file 
 
 import pandas as pd  # Pandas dataframes are a super useful tool to handle and process data.
 import os, sys   # Necessary modules to allow the python code to interact with Windows.
-
 from scipy import interpolate
 from scipy import stats
 from scipy import constants
-
 import numpy as np
-
+import openpyxl
 # TODO: Add standard errors of slope and intercepts
 
 
@@ -68,7 +66,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.linear_reg_rs_plot.setLabel("left", "<span style=\"color:black;font-size:18px\">J (mA/cm<sup>2</sup>)</span>")
         self.linear_reg_rs_plot.setLabel("bottom", "<span style=\"color:black;font-size:18px\">V (V)</span>")
         self.linear_reg_rs_plot.showGrid(x=True, y=True)
-        self.linear_reg_rs_plot.setTitle("Series Conductance Linear Regression")
+        self.linear_reg_rs_plot.setTitle("Series Resistance Linear Regression")
 
         self.linear_reg_rsh_plot.setLabel("left", "<span style=\"color:black;font-size:18px\">J (mA/cm<sup>2</sup>)</span>")
         self.linear_reg_rsh_plot.setLabel("bottom", "<span style=\"color:black;font-size:18px\">V (V)</span>")
@@ -84,6 +82,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.spin_conductance_max.valueChanged.connect(self.refresh_analysis)
         self.spin_ideality_min.valueChanged.connect(self.refresh_analysis)
         self.spin_ideality_max.valueChanged.connect(self.refresh_analysis)
+        self.radioButton_djdv_gsh.toggled.connect(self.refresh_analysis)
+        self.radioButton_jv_gsh.toggled.connect(self.refresh_analysis)
 
     def execute_processing(self):
         # As far as I know, Qt slots cannot return any data. Thus, I created this function to run all the necessary code to process the data when a file is loaded.
@@ -93,28 +93,30 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # error handling "try" and "except" functions. If the user selects a file, the code inside "try:" will run. If not, an error will be raised, and the "except:"
         # code will just ignore it and do nothing.
 
-        try:
-            self.data = self.load_data()
+        self.plot_light_JV = True  # For now, this feature is not implemented. JV Light data will always be required.
+        self.plot_dark_JV = self.checkBox_analyse_dark.isChecked()
+        try: # A janky way to handler errors but...it works 🤷‍
+            self.data = self.load_data(self.plot_light_JV, self.plot_dark_JV)
             # the load_data() function will return the light JV and dark JV data in dataframes, with said dataframes inside a tuple
             dataframe_light_JV = self.data[0]  # the light JV data sits in the 1st position of the tuple
             dataframe_dark_JV = self.data[1]  # the dark JV data sits in the 2nd position of the tuple
-            # TODO: Add the option to not plot light or dark. It needs to take into account the dataframe loading above ⬆
-            self.plot_light_JV = True
-            self.plot_dark_JV = True
-            # The "self.figures_of_merit" will make this dataframe "global" inside the MainWindow class.
-            figures_of_merit_data = pd.DataFrame([self.compute_fom(dataframe_light_JV)])
-            self.update_jv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
 
-            self.update_gui_results(figures_of_merit_data)
+            # The "self.figures_of_merit" will make this dataframe "global" inside the MainWindow class.
+            self.figures_of_merit_data = pd.DataFrame([self.compute_fom(dataframe_light_JV)])
+            self.update_jv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
+            # Run the update_gui_results function with the figures of merit results
+            self.update_gui_results(self.figures_of_merit_data)
+            self.refresh_analysis()
+
         except:
             pass
-        self.refresh_analysis()
-    def load_data(self):
+
+    def load_data(self, plot_light_JV, plot_dark_JV ):
         # the line below will open a file dialog window, and ask for the user to select a .csv file. The third part of the .getOpenFileName()
         # with "CSV Files (*.csv)" will apply a filter so that only .csv files show up. This will return a tuple with the position
         # zero containing the path and file name, and the second containing the data filter mentioned previously. Since the program
         # only requires the path and filename the ", _" is used to discard the second tuple value.
-        if self.checkBox_analyse_light.isChecked():
+        if plot_light_JV:
             light_data_work_path, _ = QFileDialog.getOpenFileName(self, "Select an input file with Light JV data", "", "CSV Files (*.csv)")
             # with the file selected, the program needs to change it's work path. The previous function will return a string with the entire path and the name of the file included.
             # However, the os.chdir function will not work if give the filename. It needs to be removed. To do so, .rpartition is used to partition the previous string in the last "/"
@@ -127,7 +129,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             if light_data_file:
                 self.lineEdit_loaded_file.setText(light_data_file)  # with the file selected, the work path and file name will be displayed in the lineEdit "loaded_file"
                 light_data = self.parse_file(light_data_file)
-            if self.checkBox_analyse_dark.isChecked():
+            if plot_dark_JV:
                 if self.checkBox_autodark.isChecked():
                     try:
                         file_name_list = list(light_data_file)
@@ -201,7 +203,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.jv_plot.plot(dataframe_dark_JV.V, dataframe_dark_JV.I, name = "Dark J-V", pen=pen, symbol='o', symbolSize=5, symbolBrush='k')
 
     def update_djdv_plot(self,dataframe_light_JV, dataframe_dark_JV, plot_light_JV, plot_dark_JV):
-        # TODO: ADD OPTION TO CHOOSE G FROM JV OR DJDV
 
         self.djdv_plot.clear()
         self.djdv_plot.addLegend()
@@ -220,7 +221,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             voltage_interval_light = voltage_interval_light.reset_index(drop=True)
             # Linear regression to calculate the shunt conductance
 
-            djdv_light_lin_regress = stats.linregress(voltage_interval_light, djdv_light_spline_derivative(voltage_interval_light)) # TODO: USE LINEAR VALUES FORGET DERIVATIVE
+            djdv_light_lin_regress = stats.linregress(voltage_interval_light, djdv_light_spline_derivative(voltage_interval_light)) 
             djdv_light_slope = djdv_light_lin_regress.slope  # The slope will be the shunt conductance
             djdv_light_rsquared = djdv_light_lin_regress.rvalue**2  # Calculates the r-squared
             pen = pg.mkPen(color=(255, 0, 0), width=3)  # To change the color of the plot, you need assign a color to the "pen". In this case (RGB) 255, 0, 0 is RED.
@@ -272,11 +273,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.dvdj_plot.clear()
         self.dvdj_plot.addLegend()
-
         dvdj_x_min = self.spin_ideality_min.value()
         dvdj_x_max = self.spin_ideality_max.value()
 
-        # TODO: Fix spin wheel crash when min >  max
         if plot_light_JV:
             # The voltage range is adjusted in accordance to the user's input
             voltage_interval_light = dataframe_light_JV.V[(dataframe_light_JV["V"] >= dvdj_x_min) & (dataframe_light_JV["V"] <= dvdj_x_max)]
@@ -302,7 +301,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             dvdj_light_rsquared = dvdj_light_lin_regress.rvalue ** 2  # Calculates the r-squared
             # For the ideality factor calculation
             A1_light = ((dvdj_light_slope/ 1000) * q) / (k * T)
-
+            A1_light_rsquared = dvdj_light_rsquared
             # Plot
             pen = pg.mkPen(color=(255, 0, 0), width=3)  # To change the color of the plot, you need assign a color to the "pen". In this case (RGB) 255, 0, 0 is RED.
             # The width is also changed to 3 px wide
@@ -316,6 +315,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             dvdj_light_intercept = 0
             dvdj_light_rsquared = 0
             A1_light = 0
+            A1_light_rsquared = dvdj_light_rsquared
             
         if plot_dark_JV:
 
@@ -343,7 +343,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             dvdj_dark_rsquared = dvdj_dark_lin_regress.rvalue ** 2  # Calculates the r-squared
             # For the ideality factor calculation
             A1_dark = dvdj_dark_slope * q / (k * T)/1000
-
+            A1_dark_rsquared = dvdj_dark_rsquared
             # Plot
             pen = pg.mkPen(color=(0, 0, 0), width=3)
             self.dvdj_plot.plot(jjsc_dark, dVdJ_dark, name="Dark", pen=pen, symbol='o', symbolSize=5, symbolBrush='k')
@@ -355,21 +355,24 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             dvdj_dark_intercept = 0
             dvdj_dark_rsquared = 0
             A1_dark = 0
+            A1_dark_rsquared = dvdj_dark_rsquared
 
-        dvdj_results = dict({"dvdj_light_series_resistance": dvdj_light_intercept, "dvdj_light_rsquared": dvdj_light_rsquared, "A1_light": A1_light,
-                             "dvdj_dark_series_resistance": dvdj_dark_intercept, "djdv_dark_rsquared": dvdj_dark_rsquared, "A1_dark": A1_dark})
+        dvdj_results = dict({"dvdj_light_series_resistance": dvdj_light_intercept, "dvdj_light_rsquared": dvdj_light_rsquared, "A1_light": A1_light, "A1_light_rsquared": A1_light_rsquared,
+                             "dvdj_dark_series_resistance": dvdj_dark_intercept, "djdv_dark_rsquared": dvdj_dark_rsquared, "A1_dark": A1_dark, "A1_dark_rsquared": A1_dark_rsquared})
 
-        self.result_gslight.setText(str(round(dvdj_results["dvdj_light_series_resistance"],2)))
-        self.result_gslight_rsquared.setText(str(round(dvdj_results["dvdj_light_rsquared"],3)))
-        self.result_a1light.setText(str(round(A1_light,2)))
+        self.result_gslight.setText(str(round(dvdj_results["dvdj_light_series_resistance"], 2)))
+        self.result_gslight_rsquared.setText(str(round(dvdj_results["dvdj_light_rsquared"], 3)))
+        self.result_a1light.setText(str(round(A1_light, 2)))
+        self.result_a1light_rsquared.setText(str(round(dvdj_results["A1_light_rsquared"], 3)))
 
-        self.result_gsdark.setText(str(round(dvdj_results["dvdj_dark_series_resistance"],2)))
-        self.result_gsdark_rsquared.setText(str(round(dvdj_results["djdv_dark_rsquared"],3)))
-        self.result_a1dark.setText(str(round(A1_dark,2)))
+        self.result_gsdark.setText(str(round(dvdj_results["dvdj_dark_series_resistance"], 2)))
+        self.result_gsdark_rsquared.setText(str(round(dvdj_results["djdv_dark_rsquared"], 3)))
+        self.result_a1dark.setText(str(round(A1_dark, 2)))
+        self.result_a1dark_rsquared.setText(str(round(dvdj_results["A1_dark_rsquared"], 3)))
 
         return dvdj_results
 
-    def update_jjsc_plot(self,dataframe_light_JV, dataframe_dark_JV, light_series_resistance, dark_series_resistance, shunt_conductance_light, shunt_conductance_dark, plot_light_JV, plot_dark_JV):
+    def update_jjsc_plot(self, dataframe_light_JV, dataframe_dark_JV, light_series_resistance, dark_series_resistance, shunt_conductance_light, shunt_conductance_dark, plot_light_JV, plot_dark_JV):
 
         # Lab's temperature for ideality factor calculation:
         T = 293.15  # 20℃
@@ -411,24 +414,28 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             V_RJ_light_analysis = V_RJ_light_analysis.loc[voltage_interval_light.index]
             jjsc_gv_light_analysis = jjsc_gv_light_analysis.reset_index(drop=True)
             V_RJ_light_analysis = V_RJ_light_analysis.reset_index(drop=True)
-
+            # Since it is not possible to calculate the linear regression of a logarithmic function, the Y variable goes through log()
             linear_regression_jjsc = stats.linregress(V_RJ_light_analysis, np.log(jjsc_gv_light_analysis))
 
-            A2_light = q / (linear_regression_jjsc.slope * k * T)
+            A2_light = q / (linear_regression_jjsc.slope * k * T)  # Calculating the A2 using the variables previously defined
+            A2_light_rsquared = linear_regression_jjsc.rvalue**2
+
+            # However, the J0 is calculated in the semilog plot, thus, the interception value goes trough exp()
             J0_light = np.exp(linear_regression_jjsc.intercept)
+            J0_light_rsquared = linear_regression_jjsc.rvalue**2
+
             # Plotting in red
             pen = pg.mkPen(color=(255, 0, 0), width=3)
             self.jjsc_plot.plot(V_RJ_light, jjsc_gv_light, name="Light", pen=pen, symbol="o", symbolSize=5, symbolBrush='r')
             # Plotting the selected data
             pen = pg.mkPen(color=(0, 0, 255), width=3)
             self.jjsc_plot.plot(V_RJ_light_analysis, jjsc_gv_light_analysis, name="Selected Light", pen=pen, symbol="o", symbolSize=5, symbolBrush='b')
-            print("A2_light")
-            print(A2_light)
-            print("J0_light")
-            print(J0_light)
         else:
             A2_light = 0
+            A2_light_rsquared = 0
             J0_light = 0
+            J0_light_rsquared = 0
+
         if plot_dark_JV:
 
             # The voltage interval to use for the calculations will be the one stipulated previously by the user.
@@ -462,7 +469,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             linear_regression_jjsc = stats.linregress(V_RJ_dark_analysis, np.log(jjsc_gv_dark_analysis))
 
             A2_dark = q / (linear_regression_jjsc.slope * k * T)
+            A2_dark_rsquared = linear_regression_jjsc.rvalue ** 2
+
             J0_dark = np.exp(linear_regression_jjsc.intercept)
+            J0_dark_rsquared = linear_regression_jjsc.rvalue ** 2
 
             # Plotting in black
             pen = pg.mkPen(color=(0, 0, 0), width=3)
@@ -470,22 +480,24 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # Plotting the selected data
             pen = pg.mkPen(color=(0, 255, 0), width=3)
             self.jjsc_plot.plot(V_RJ_dark_analysis, jjsc_gv_dark_analysis, name="Selected Dark", pen=pen, symbol="o", symbolSize=5, symbolBrush='g')
-            print("J0_dark")
-            print(J0_dark)
+
         else:
             A2_dark = 0
+            A2_dark_rsquared = 0
             J0_dark = 0
+            J0_dark_rsquared = 0
+        jjsc_results = dict({"A2_light": A2_light, "A2_light_rsquared": A2_light_rsquared, "J0_light": J0_light, "J0_light_rsquared": J0_light_rsquared,
+                             "A2_dark": A2_dark, "A2_dark_rsquared": A2_dark_rsquared, "J0_dark": J0_dark, "J0_dark_rsquared": J0_dark_rsquared})
 
-        jjsc_results = dict({"A2_light": A2_light, "J0_light": J0_light,
-                             "A2_dark": A2_dark, "J0_dark": J0_dark})
-        # TODO: ADD JJSC RESULTS
-        # self.result_gslight.setText(str(round(dvdj_results["dvdj_light_series_resistance"], 2)))
-        # self.result_gslight_rsquared.setText(str(round(dvdj_results["dvdj_light_rsquared"], 3)))
-        # self.result_a1light.setText(str(round(A1_light, 2)))
-        #
-        # self.result_gsdark.setText(str(round(dvdj_results["dvdj_dark_series_resistance"], 2)))
-        # self.result_gsdark_rsquared.setText(str(round(dvdj_results["djdv_dark_rsquared"], 3)))
-        # self.result_a1dark.setText(str(round(A1_dark, 2)))
+        self.result_a2light.setText(str(round(A2_light, 2)))
+        self.result_a2light_rsquared.setText(str(round(A2_light_rsquared, 3)))
+        self.result_j0light.setText('{:0.2e}'.format(J0_light))
+        self.result_j0light_rsquared.setText(str(round(J0_light_rsquared, 3)))
+
+        self.result_a2dark.setText(str(round(A2_dark, 2)))
+        self.result_a2dark_rsquared.setText(str(round(A2_dark_rsquared, 3)))
+        self.result_j0dark.setText('{:0.2e}'.format(J0_dark))
+        self.result_j0dark_rsquared.setText(str(round(J0_dark_rsquared, 3)))
 
         return jjsc_results
     def compute_fom(self, dataframe_light_JV):
@@ -522,9 +534,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Now that we have a series with the 1st derivative values higher than 10% of the average, the indexes can be used to "clean" the current_range_rs series.
         current_range_rs = current_range_rs.loc[current_range_rs_diff.index]
         voltage_range_rs = voltage_range_rs.loc[current_range_rs_diff.index]  # The voltage series needs to have the same length as the current one.
-        conductance_series_lin_regress = stats.linregress(voltage_range_rs, current_range_rs)  # Linear regression of the prepared data
-        conductance_series = conductance_series_lin_regress.slope  # The series conductance will be the slope of the linear regression
-        conductance_series_rsquared = conductance_series_lin_regress.rvalue**2  # Calculates the r-squared, in order to determine how good the fit is.
+        resistance_series_lin_regress = stats.linregress(voltage_range_rs, current_range_rs)  # Linear regression of the prepared data
+        resistance_series = 1000 / resistance_series_lin_regress.slope  # The series resistance will be the slope of the linear regression. Divided by a thousand to convert from mS to Ω
+        resistance_series_rsquared = resistance_series_lin_regress.rvalue**2  # Calculates the r-squared, in order to determine how good the fit is.
 
         # Calculate the power, efficiency, fill factor
         power = voltage_sweep*current_sweep  # Since the polarity of the current was not changed, the "useful" power will be negative
@@ -537,7 +549,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Will now create a list with the names of the columns that will be used to create a dataframe to hold and return the FOM values.
         figures_of_merit = dict({"voltage_open_circuit": voltage_open_circuit, "current_short_circuit": current_short_circuit, "fill_factor": fill_factor, "voltage_max_power": voltage_max_power,
                                  "current_max_power": current_max_power, "power_maximum": power_maximum, "efficiency": efficiency, "conductance_shunt": conductance_shunt,
-                                 "conductance_shunt_rsquared": conductance_shunt_rsquared, "conductance_series": conductance_series, "conductance_series_rsquared": conductance_series_rsquared })
+                                 "conductance_shunt_rsquared": conductance_shunt_rsquared, "resistance_series": resistance_series, "resistance_series_rsquared": resistance_series_rsquared })
 
         # ---------------- #
         # ADDITIONAL PLOTS #
@@ -564,7 +576,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # This line will plot the linear regression
         self.linear_reg_rsh_plot.plot(voltage_range_rsh, conductance_shunt_lin_regress.intercept + conductance_shunt_lin_regress.slope*voltage_range_rsh, name="Linear Regression", pen=pen, symbol="o", symbolSize=5, symboBrush="b")
 
-        # Time to plot the linear regression of the series conductance
+        # Time to plot the linear regression of the series resistance
         self.linear_reg_rs_plot.clear()
         self.linear_reg_rs_plot.addLegend()
         pen = pg.mkPen(color=(255, 0, 0), width=3)  # First, we will define the "red pen", to plot the original JV data used for the JV calculation.
@@ -574,7 +586,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.linear_reg_rs_plot.plot(voltage_range_rs, current_range_rs, name="JV Data", pen=pen, symbol="o", symbolSize=8, symbolBrush="r")
         pen = pg.mkPen(color=(0, 0, 255), width=3)  # Setting the pen to blue to plot the linear regression.
         # This line will plot the linear regression
-        self.linear_reg_rs_plot.plot(voltage_range_rs, conductance_series_lin_regress.intercept + conductance_series_lin_regress.slope*voltage_range_rs, name="Linear Regression", pen=pen, symbol="o", symbolSize=5, symboBrush="b")
+        self.linear_reg_rs_plot.plot(voltage_range_rs, resistance_series_lin_regress.intercept + resistance_series_lin_regress.slope*voltage_range_rs, name="Linear Regression", pen=pen, symbol="o", symbolSize=5, symboBrush="b")
 
         return figures_of_merit
 
@@ -590,34 +602,38 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.result_eff.setText(str(round(fom_dataframe["efficiency"][0], 3)))
         self.result_gsh.setText(str(round(fom_dataframe["conductance_shunt"][0], 3)))
         self.result_gsh_squared.setText(str(round(fom_dataframe["conductance_shunt_rsquared"][0], 3)))
-        self.result_gs.setText(str(round(fom_dataframe["conductance_series"][0], 2)))
-        self.result_gs_squared.setText(str(round(fom_dataframe["conductance_series_rsquared"][0], 3)))
+        self.result_rs.setText(str(round(fom_dataframe["resistance_series"][0], 2)))
+        self.result_rs_squared.setText(str(round(fom_dataframe["resistance_series_rsquared"][0], 3)))
 
+    def save_results(self):
 
 
     def refresh_analysis(self):
-        # Before changing the  analysis, the program needs to check if there is any data loaded. If there is, the refresh_analysis() function will proceed normally
-        # If not, it will throw an error at the user
-        # try:
-        #
-        #
-        #
-        # except:
-        #     error_dialog = QMessageBox()
-        #     error_dialog.setIcon(QMessageBox.Critical)
-        #     error_dialog.setText("There is no data to analyse!")
-        #     error_dialog.setInformativeText("Please load the J-V data first.")
-        #     error_dialog.setWindowTitle("Error!")
-        #     error_dialog.exec_()
+
+        # if self.spin_ideality_min.value() == self.spin_ideality_max.value():
+        #     self.spin_ideality_min.setValue(self.spin_ideality_max.value() - 0.01)
+        # elif self.spin_ideality_min.value() > self.spin_ideality_max.value():
+        #     self.spin_ideality_min.setValue(self.spin_ideality_max.value() - 0.01)
+
         try:
             dataframe_light_JV = self.data[0]  # the light JV data sits in the 1st position of the tuple
             dataframe_dark_JV = self.data[1]  # the dark JV data sits in the 2nd position of the tuple
             self.djdv_results = self.update_djdv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
             # Feeds the Light and Dark J-V data, as well as the shunt conductance in order for the GV correction
-            self.dvdj_results = self.update_dvdj_plot(dataframe_light_JV, dataframe_dark_JV,self.djdv_results["djdv_light_condutance"],self.djdv_results["djdv_dark_condutance"], self.plot_light_JV, self.plot_dark_JV)
+            # Due to the sensitivity of the Hegedus method to calculate the shunt conductance, an option was added to use either the "Hegedus" conductance,
+            # or the "simple" conductance, calculated directly from the light JV curve
+            # This if will check if the dJdV radio button is checked. If it is, it will use the "Hegedus conductance"
+            if self.radioButton_djdv_gsh.isChecked():
+                conductance_variable_light = self.djdv_results["djdv_light_condutance"]
+                conductance_variable_dark = self.djdv_results["djdv_dark_condutance"]
+            else:
+                # If it's not checked, then that must mean that the J-V curve button is pressed. If so, then the shunt conductance to be used will the LIGHT J-V one.
+                conductance_variable_light = self.figures_of_merit_data["conductance_shunt"][0]
+                conductance_variable_dark = self.figures_of_merit_data["conductance_shunt"][0]
+            self.dvdj_results = self.update_dvdj_plot(dataframe_light_JV, dataframe_dark_JV, conductance_variable_light, conductance_variable_dark, self.plot_light_JV, self.plot_dark_JV)
 
             self.jjsc_results = self.update_jjsc_plot(dataframe_light_JV, dataframe_dark_JV, self.dvdj_results["dvdj_light_series_resistance"], self.dvdj_results["dvdj_dark_series_resistance"],
-                                                 self.djdv_results["djdv_light_condutance"], self.djdv_results["djdv_dark_condutance"], self.plot_light_JV,self.plot_dark_JV)
+            conductance_variable_light, conductance_variable_dark, self.plot_light_JV, self.plot_dark_JV)
         except:
             pass
 def main():
