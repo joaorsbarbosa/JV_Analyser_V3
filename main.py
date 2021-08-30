@@ -12,7 +12,7 @@ from scipy import constants
 import numpy as np
 import openpyxl
 # TODO: Add standard errors of slope and intercepts
-
+# TODO: Add saving feature
 
 
 ##########################################
@@ -84,7 +84,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.spin_ideality_max.valueChanged.connect(self.refresh_analysis)
         self.radioButton_djdv_gsh.toggled.connect(self.refresh_analysis)
         self.radioButton_jv_gsh.toggled.connect(self.refresh_analysis)
-
+        self.actionSave_Data.triggered.connect(self.save_results)
     def execute_processing(self):
         # As far as I know, Qt slots cannot return any data. Thus, I created this function to run all the necessary code to process the data when a file is loaded.
         # The data processing starts by loading the .csv data of both light and dark curves
@@ -104,8 +104,6 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # The "self.figures_of_merit" will make this dataframe "global" inside the MainWindow class.
             self.figures_of_merit_data = pd.DataFrame([self.compute_fom(dataframe_light_JV)])
             self.update_jv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
-            # Run the update_gui_results function with the figures of merit results
-            self.update_gui_results(self.figures_of_merit_data)
             self.refresh_analysis()
 
         except:
@@ -588,25 +586,40 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # This line will plot the linear regression
         self.linear_reg_rs_plot.plot(voltage_range_rs, resistance_series_lin_regress.intercept + resistance_series_lin_regress.slope*voltage_range_rs, name="Linear Regression", pen=pen, symbol="o", symbolSize=5, symboBrush="b")
 
+        # ---------------- #
+        #    UPDATE GUI    #
+        # ---------------- #
+
+        self.result_voc.setText(str(round(voltage_open_circuit, 3)))
+        self.result_jsc.setText(str(round(current_short_circuit, 2)))
+        self.result_ff.setText(str(round(fill_factor, 2)))
+        self.result_vmp.setText(str(round(voltage_max_power, 3)))
+        self.result_jmp.setText(str(round(current_max_power, 2)))
+        self.result_pmax.setText(str(round(power_maximum, 3)))
+        self.result_eff.setText(str(round(efficiency, 3)))
+        self.result_gsh.setText(str(round(conductance_shunt, 3)))
+        self.result_gsh_squared.setText(str(round(conductance_shunt_rsquared, 3)))
+        self.result_rs.setText(str(round(resistance_series, 2)))
+        self.result_rs_squared.setText(str(round(resistance_series_rsquared, 3)))
+
         return figures_of_merit
 
-    def update_gui_results(self, fom_dataframe):
 
-        # This code will add the previously calculated figures of merit into the GUI. It will also round the numbers to 2 or 3 decimals
-        self.result_voc.setText(str(round(fom_dataframe["voltage_open_circuit"][0], 3)))
-        self.result_jsc.setText(str(round(fom_dataframe["current_short_circuit"][0], 2)))
-        self.result_ff.setText(str(round(fom_dataframe["fill_factor"][0], 2)))
-        self.result_vmp.setText(str(round(fom_dataframe["voltage_max_power"][0], 3)))
-        self.result_jmp.setText(str(round(fom_dataframe["current_max_power"][0], 2)))
-        self.result_pmax.setText(str(round(fom_dataframe["power_maximum"][0], 3)))
-        self.result_eff.setText(str(round(fom_dataframe["efficiency"][0], 3)))
-        self.result_gsh.setText(str(round(fom_dataframe["conductance_shunt"][0], 3)))
-        self.result_gsh_squared.setText(str(round(fom_dataframe["conductance_shunt_rsquared"][0], 3)))
-        self.result_rs.setText(str(round(fom_dataframe["resistance_series"][0], 2)))
-        self.result_rs_squared.setText(str(round(fom_dataframe["resistance_series_rsquared"][0], 3)))
 
     def save_results(self):
+        # Get a directory to save the data
+        save_directory = QFileDialog.getExistingDirectory(self, "Choose a directory to save the resulting data")
+        # with the directory obtained, change the work path
+        os.chdir(save_directory)
+        # self.figures_of_merit_data already a dataframe
+        djdv_dataframe = pd.DataFrame(self.djdv_results)
+       # self.djdv_results         djdv_light_condutance djdv_light_rsquared djdv_dark_condutance djdv_dark_rsquared
 
+        dvdj_dataframe = pd.DataFrame(self.dvdj_results)
+       #  self.dvdj_results  dvdj_light_series_resistance dvdj_light_rsquared A1_light A1_light_rsquared dvdj_dark_series_resistance djdv_dark_rsquared A1_dark A1_dark_rsquared
+        jjsc_dataframe = pd.DataFrame(self.jjsc_results)
+       # self.jjsc_results  A2_light A2_light_rsquared J0_light J0_light_rsquared A2_dark A2_dark_rsquared  J0_dark J0_dark_rsquared
+        print("bla")
 
     def refresh_analysis(self):
 
