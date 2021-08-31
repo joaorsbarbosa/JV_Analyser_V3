@@ -1,6 +1,6 @@
 from PyQt5 import QtWidgets, QtCore, uic
 from PyQt5.QtWidgets import QFileDialog, QMessageBox  # necessary import of the file dialog window
-from pyqtgraph import PlotWidget
+#from pyqtgraph import PlotWidget
 import pyqtgraph as pg
 from JV_Analyser_GUI import Ui_MainWindow  # this import will load the .py file with the GUI
 
@@ -10,7 +10,7 @@ from scipy import interpolate
 from scipy import stats
 from scipy import constants
 import numpy as np
-import openpyxl
+
 # TODO: Add standard errors of slope and intercepts
 # TODO: Add saving feature
 
@@ -21,6 +21,9 @@ import openpyxl
 # ---------------------------------------#
 # ---------------- PLOT -----------------#
 # ---------------------------------------#
+
+#QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
+QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, False)
 
 pg.setConfigOption('background', 'w')  # Sets the background of the plots as WHITE
 pg.setConfigOption('foreground', 'k')  # Sets the lines of the plots as BLACK
@@ -102,7 +105,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             dataframe_dark_JV = self.data[1]  # the dark JV data sits in the 2nd position of the tuple
 
             # The "self.figures_of_merit" will make this dataframe "global" inside the MainWindow class.
-            self.figures_of_merit_data = pd.DataFrame([self.compute_fom(dataframe_light_JV)])
+            self.figures_of_merit_data = self.compute_fom(dataframe_light_JV)
             self.update_jv_plot(dataframe_light_JV, dataframe_dark_JV, self.plot_light_JV, self.plot_dark_JV)
             self.refresh_analysis()
 
@@ -126,6 +129,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             if light_data_file:
                 self.lineEdit_loaded_file.setText(light_data_file)  # with the file selected, the work path and file name will be displayed in the lineEdit "loaded_file"
+
                 light_data = self.parse_file(light_data_file)
             if plot_dark_JV:
                 if self.checkBox_autodark.isChecked():
@@ -607,22 +611,25 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
 
     def save_results(self):
-        # Get a directory to save the data
-        save_directory = QFileDialog.getExistingDirectory(self, "Choose a directory to save the resulting data")
-        # with the directory obtained, change the work path
-        os.chdir(save_directory)
-        # self.figures_of_merit_data already a dataframe
-        djdv_dataframe = pd.DataFrame(self.djdv_results)
-       # self.djdv_results         djdv_light_condutance djdv_light_rsquared djdv_dark_condutance djdv_dark_rsquared
 
-        dvdj_dataframe = pd.DataFrame(self.dvdj_results)
-       #  self.dvdj_results  dvdj_light_series_resistance dvdj_light_rsquared A1_light A1_light_rsquared dvdj_dark_series_resistance djdv_dark_rsquared A1_dark A1_dark_rsquared
-        jjsc_dataframe = pd.DataFrame(self.jjsc_results)
-       # self.jjsc_results  A2_light A2_light_rsquared J0_light J0_light_rsquared A2_dark A2_dark_rsquared  J0_dark J0_dark_rsquared
-        print("bla")
+        # This is messy, but it will add all the results from the various dicts into a single dataframe with the names and data in two collumns
+        save_data_dataframe = pd.DataFrame.from_dict(self.figures_of_merit_data, orient="index")
+        save_data_dataframe = save_data_dataframe.append(pd.DataFrame.from_dict(self.djdv_results, orient="index"))
+        save_data_dataframe = save_data_dataframe.append(pd.DataFrame.from_dict(self.dvdj_results, orient="index"))
+        save_data_dataframe = save_data_dataframe.append(pd.DataFrame.from_dict(self.jjsc_results, orient="index"))
+
+        save_file_name = self.lineEdit_loaded_file.text()
+        save_file_name = save_file_name.split(".")[0]
+        save_file_name = save_file_name + "_results.xlsx"
+
+        # Get a directory to save the data
+        save_directory = QFileDialog.getSaveFileName(self, "Choose a directory to save the resulting data", save_file_name, "Excel Files (*.xlsx)")
+        # with the directory obtained, change the work path
+        path_filename = save_directory[0]
+        os.chdir(path_filename.rpartition("/")[0])
+        save_data_dataframe.to_excel(path_filename.rsplit("/")[-1])
 
     def refresh_analysis(self):
-
         # if self.spin_ideality_min.value() == self.spin_ideality_max.value():
         #     self.spin_ideality_min.setValue(self.spin_ideality_max.value() - 0.01)
         # elif self.spin_ideality_min.value() > self.spin_ideality_max.value():
@@ -641,8 +648,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 conductance_variable_dark = self.djdv_results["djdv_dark_condutance"]
             else:
                 # If it's not checked, then that must mean that the J-V curve button is pressed. If so, then the shunt conductance to be used will the LIGHT J-V one.
-                conductance_variable_light = self.figures_of_merit_data["conductance_shunt"][0]
-                conductance_variable_dark = self.figures_of_merit_data["conductance_shunt"][0]
+                conductance_variable_light = self.figures_of_merit_data["conductance_shunt"]
+                conductance_variable_dark = self.figures_of_merit_data["conductance_shunt"]
             self.dvdj_results = self.update_dvdj_plot(dataframe_light_JV, dataframe_dark_JV, conductance_variable_light, conductance_variable_dark, self.plot_light_JV, self.plot_dark_JV)
 
             self.jjsc_results = self.update_jjsc_plot(dataframe_light_JV, dataframe_dark_JV, self.dvdj_results["dvdj_light_series_resistance"], self.dvdj_results["dvdj_dark_series_resistance"],
@@ -651,9 +658,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             pass
 def main():
 
+
     app = QtWidgets.QApplication(sys.argv)
-    app.setAttribute(QtCore.Qt.AA_Use96Dpi,True)  # Prevents windows DPI thing screwing up with the scaling
-    app.setAttribute(QtCore.Qt.AA_DisableHighDpiScaling, True)  # Prevents windows DPI thing screwing up with the scaling
     main = MainWindow()
     main.show()
     sys.exit(app.exec())
