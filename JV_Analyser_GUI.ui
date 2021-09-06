@@ -31,7 +31,7 @@
    </font>
   </property>
   <property name="windowTitle">
-   <string>JV Analyser Mk 3</string>
+   <string>JV Analyser Mk 2</string>
   </property>
   <property name="windowIcon">
    <iconset resource="images.qrc">
@@ -1635,8 +1635,11 @@
        <property name="bottomMargin">
         <number>10</number>
        </property>
-       <property name="spacing">
+       <property name="horizontalSpacing">
         <number>10</number>
+       </property>
+       <property name="verticalSpacing">
+        <number>0</number>
        </property>
        <item row="0" column="1">
         <widget class="PlotWidget" name="djdv_plot" native="true">
