@@ -12,7 +12,7 @@ from scipy import constants
 import numpy as np
 
 # TODO: Add standard errors of slope and intercepts
-# TODO: Add saving feature
+
 
 
 ##########################################
@@ -23,7 +23,12 @@ import numpy as np
 # ---------------------------------------#
 
 #QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
-QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, False)
+#QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, False)
+if hasattr(QtCore.Qt, 'AA_EnableHighDpiScaling'):
+    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
+
+if hasattr(QtCore.Qt, 'AA_UseHighDpiPixmaps'):
+    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
 
 pg.setConfigOption('background', 'w')  # Sets the background of the plots as WHITE
 pg.setConfigOption('foreground', 'k')  # Sets the lines of the plots as BLACK
