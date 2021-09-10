@@ -1410,7 +1410,7 @@
         <widget class="QLabel" name="label_conductance">
          <property name="font">
           <font>
-           <pointsize>10</pointsize>
+           <pointsize>9</pointsize>
            <weight>50</weight>
            <bold>false</bold>
           </font>
@@ -1464,7 +1464,7 @@
         <widget class="QLabel" name="label_ideality_factor">
          <property name="font">
           <font>
-           <pointsize>10</pointsize>
+           <pointsize>9</pointsize>
            <weight>50</weight>
            <bold>false</bold>
           </font>
@@ -1557,7 +1557,7 @@
      <enum>QTabWidget::Triangular</enum>
     </property>
     <property name="currentIndex">
-     <number>0</number>
+     <number>2</number>
     </property>
     <widget class="QWidget" name="plots_tab">
      <attribute name="title">
@@ -1748,7 +1748,7 @@
        <rect>
         <x>10</x>
         <y>90</y>
-        <width>551</width>
+        <width>651</width>
         <height>241</height>
        </rect>
       </property>
@@ -1873,7 +1873,7 @@
        <rect>
         <x>10</x>
         <y>340</y>
-        <width>551</width>
+        <width>651</width>
         <height>241</height>
        </rect>
       </property>
