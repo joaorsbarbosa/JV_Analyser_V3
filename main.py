@@ -1,3 +1,4 @@
+import numpy as np
 from PyQt5 import QtWidgets, QtCore, uic
 from PyQt5.QtWidgets import QFileDialog, QMessageBox  # necessary import of the file dialog window
 #from pyqtgraph import PlotWidget
@@ -9,7 +10,7 @@ import os, sys   # Necessary modules to allow the python code to interact with W
 from scipy import interpolate
 from scipy import stats
 from scipy import constants
-import numpy as np
+
 
 # TODO: Add standard errors of slope and intercepts
 
